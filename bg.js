@@ -1,295 +1,43 @@
 /**
- * Forest fly-through — camera drifts between tall trees.
- * Trees are rendered as tapered vertical beams lit from above.
- * No sky or ground is visible — only the gradient light on trunks.
- * Trees fade in/out through depth-fog so they never pop.
+ * Forest background — OffscreenCanvas loader.
+ * Transfers canvas rendering to a Web Worker for smooth, jank-free animation.
+ * Falls back to main-thread rendering on older browsers.
  */
+(function () {
+  var c = document.querySelector("canvas");
 
-const canvas = document.querySelector("canvas");
-const ctx = canvas.getContext("2d");
+  if (typeof c.transferControlToOffscreen === "function") {
+    /* ── Worker path ─────────────────────────────────────────────────── */
+    var oc = c.transferControlToOffscreen();
+    var w = new Worker("bg-worker.js");
 
-// ─── tunables ────────────────────────────────────────────────────────────────
-const DEPTH_FAR = 55; // max spawn depth
-const DEPTH_NEAR = 8; // min spawn depth
-const HALF_W = 20; // half-width of the forest lane (world units)
-const SPEED_BASE = 0.004; // world units per ms
-const DRIFT_AMP = 4.5; // left/right camera drift amplitude
-const DRIFT_FREQ = 0.00008; // drift oscillation frequency
-const X_SPACING = 3.6; // world-units between column centres
-const Z_SPACING = 4.8; // world-units between rows within a column
-const X_JITTER = X_SPACING * 0.3; // random lateral offset per tree
-const RECYCLE_DELAY_MS = 1000; // wait 1s before recycling near-camera trees
-const NEAR_FADE_START_Z = 7.2; // start fading center trees at this depth
-const NEAR_FADE_END_Z = 1.1; // fully faded at this depth
-const CENTER_FADE_BAND_X = 1.35; // only trees within this lateral distance fade out
-const VIEW_WAYPOINTS = [90, 75, 115, 90]; // camera yaw sweep keyframes (degrees)
-const VIEW_SWEEP_MS = 30000; // full cycle duration (30s)
+    w.postMessage(
+      {
+        type: "init",
+        canvas: oc,
+        w: innerWidth,
+        h: innerHeight,
+        dpr: devicePixelRatio || 1,
+      },
+      [oc],
+    );
 
-// ─── state ───────────────────────────────────────────────────────────────────
-let W = 0,
-  H = 0,
-  dpr = 1;
-
-const cam = {
-  x: 0,
-  fov: 0,
-  horizonY: 0,
-};
-
-let yawCos = 1;
-let yawSin = 0;
-
-const trees = [];
-const g = {}; // gradient cache
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-// Seeded PRNG (mulberry32) — same result every page load
-function mulberry32(seed) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const rng = mulberry32(0xabcd1234);
-function randS(a, b) {
-  return rng() * (b - a) + a;
-}
-
-function easeInOut01(u) {
-  return u * u * (3 - 2 * u);
-}
-
-// Number of rows per column — computed once when forest is built
-let rowsPerCol = 0;
-let forestReady = false;
-
-function buildForest() {
-  trees.length = 0;
-
-  // Column positions spanning full width — no center corridor
-  const cols = [];
-  for (let x = 0; x <= HALF_W + 0.01; x += X_SPACING) {
-    cols.push(x);
-    if (x > 0) cols.push(-x);
+    var tid;
+    addEventListener("resize", function () {
+      clearTimeout(tid);
+      tid = setTimeout(function () {
+        w.postMessage({
+          type: "resize",
+          w: innerWidth,
+          h: innerHeight,
+          dpr: devicePixelRatio || 1,
+        });
+      }, 120);
+    });
+  } else {
+    /* ── Fallback: load renderer on main thread ──────────────────────── */
+    var s = document.createElement("script");
+    s.src = "bg-worker.js";
+    document.body.appendChild(s);
   }
-
-  rowsPerCol = Math.ceil(DEPTH_FAR / Z_SPACING);
-
-  for (const cx of cols) {
-    for (let row = 0; row < rowsPerCol; row++) {
-      trees.push({
-        x: cx + randS(-X_JITTER, X_JITTER),
-        z: (row + 1) * Z_SPACING + randS(0, Z_SPACING * 0.3),
-        trunkW: randS(0.55, 1.1), // fixed per tree, no randomness at runtime
-        hue: randS(174, 216),
-        lit: randS(0.55, 1.0),
-        fade: 1,
-        recycleWait: 0,
-      });
-    }
-  }
-
-  trees.sort((a, b) => b.z - a.z);
-}
-
-function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = window.innerWidth;
-  H = window.innerHeight;
-  canvas.width = Math.round(W * dpr);
-  canvas.height = Math.round(H * dpr);
-  canvas.style.width = W + "px";
-  canvas.style.height = H + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  cam.fov = Math.max(W, H) * 1.55;
-  cam.horizonY = H * 0.5;
-
-  buildGradients();
-
-  if (!forestReady) {
-    buildForest();
-    forestReady = true;
-  }
-}
-
-function buildGradients() {
-  // Background — fills entire screen, no sky/ground boundary, only vertical
-  // light-to-dark representing the light pouring down from above the canopy.
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0.0, "#b8f2a8"); // bright canopy-top
-  bg.addColorStop(0.08, "#72e4b8");
-  bg.addColorStop(0.25, "#38b8d8");
-  bg.addColorStop(0.5, "#2255c4");
-  bg.addColorStop(0.74, "#1e34a0");
-  bg.addColorStop(1.0, "#100b58"); // deep floor shadow
-  g.bg = bg;
-
-  // Atmospheric depth haze — softens far trees into the gradient
-  const fog = ctx.createLinearGradient(0, 0, 0, H);
-  fog.addColorStop(0.0, "rgba(100, 210, 235, 0.10)");
-  fog.addColorStop(0.44, "rgba( 55, 135, 220, 0.20)");
-  fog.addColorStop(0.56, "rgba( 55, 130, 215, 0.20)");
-  fog.addColorStop(1.0, "rgba( 28,  65, 170, 0.10)");
-  g.fog = fog;
-}
-
-// ─── draw ─────────────────────────────────────────────────────────────────────
-function drawBackground() {
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = g.bg;
-  ctx.fillRect(0, 0, W, H);
-}
-
-function drawTree(tree) {
-  const { x, z, trunkW, hue, lit, fade } = tree;
-
-  // Oblique matrix view: rotate world in XZ by animated camera angle
-  const rx = x * yawCos - z * yawSin;
-  const rz = x * yawSin + z * yawCos;
-  if (rz <= 0.5) return;
-
-  // Depth 0=far 1=close
-  const depth = Math.max(
-    0,
-    Math.min(1, 1 - (rz - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)),
-  );
-
-  // Far fade so distant trees dissolve into background instead of hard-appearing
-  const farAlpha = Math.max(
-    0,
-    Math.min(1, (DEPTH_FAR - rz) / (DEPTH_FAR * 0.18)),
-  );
-
-  // Near fade — only center-line trees dissolve; side trees stay visible.
-  const nearT = Math.max(
-    0,
-    Math.min(1, (rz - NEAR_FADE_END_Z) / (NEAR_FADE_START_Z - NEAR_FADE_END_Z)),
-  );
-  const nearAlpha = easeInOut01(nearT);
-  const centerDx = Math.abs(rx - cam.x);
-  const centerT = Math.max(0, Math.min(1, centerDx / CENTER_FADE_BAND_X));
-  const sideKeep = easeInOut01(centerT); // 0=center, 1=sides
-  const selectiveNearAlpha = nearAlpha + (1 - nearAlpha) * sideKeep;
-
-  const alpha = fade * selectiveNearAlpha * farAlpha;
-  if (alpha <= 0.002) return;
-
-  const scale = cam.fov / rz;
-  const screenX = W * 0.5 + (rx - cam.x) * scale;
-  const baseW = trunkW * scale;
-
-  // Vanishing-point convergence for top of beam
-  // Trees converge toward a point far ahead (horizon at center)
-  const vScale = cam.fov / (DEPTH_FAR * 4); // very distant projection
-  const vx = W * 0.5 + (rx - cam.x) * vScale;
-  const topW = Math.max(0.6, baseW * 0.022);
-  const topY = -H * 0.12; // bleed off top edge
-  const bottomY = H * 1.12; // bleed off bottom edge
-
-  // --- solid tinted body ---
-  ctx.globalAlpha = (0.07 + depth * 0.28) * alpha;
-  ctx.fillStyle = `hsl(${hue}, 58%, ${36 + depth * 16}%)`;
-  ctx.beginPath();
-  ctx.moveTo(vx - topW, topY);
-  ctx.lineTo(vx + topW, topY);
-  ctx.lineTo(screenX + baseW, bottomY);
-  ctx.lineTo(screenX - baseW, bottomY);
-  ctx.closePath();
-  ctx.fill();
-
-  // --- top-down glow gradient ---
-  const gr = ctx.createLinearGradient(0, topY, 0, bottomY);
-  const ga = lit * alpha;
-  gr.addColorStop(0.0, `hsla(${hue - 14}, 92%, 90%, ${0.75 * ga})`);
-  gr.addColorStop(0.15, `hsla(${hue - 7}, 84%, 72%, ${0.42 * ga})`);
-  gr.addColorStop(0.46, `hsla(${hue},      72%, 54%, ${0.13 * ga})`);
-  gr.addColorStop(1.0, `hsla(${hue + 10}, 66%, 30%, 0)`);
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = gr;
-  ctx.beginPath();
-  ctx.moveTo(vx - topW, topY);
-  ctx.lineTo(vx + topW, topY);
-  ctx.lineTo(screenX + baseW, bottomY);
-  ctx.lineTo(screenX - baseW, bottomY);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.globalAlpha = 1;
-}
-
-// ─── update ───────────────────────────────────────────────────────────────────
-function update(dt, t) {
-  // Sine-wave yaw sweep: 90° → 75° → 115° → 90°, repeating every 30s
-  const segCount = VIEW_WAYPOINTS.length - 1;
-  const segMs = VIEW_SWEEP_MS / segCount;
-  const localT = t % VIEW_SWEEP_MS;
-  const seg = Math.min(Math.floor(localT / segMs), segCount - 1);
-  const segU = (localT - seg * segMs) / segMs;
-  const easedU = 0.5 - 0.5 * Math.cos(segU * Math.PI); // sine ease-in-out
-  const viewAngleDeg =
-    VIEW_WAYPOINTS[seg] +
-    (VIEW_WAYPOINTS[seg + 1] - VIEW_WAYPOINTS[seg]) * easedU;
-  const yaw = ((90 - viewAngleDeg) * Math.PI) / 180;
-  yawCos = Math.cos(yaw);
-  yawSin = Math.sin(yaw);
-
-  // Smooth S-curve camera drift — no straight lines
-  cam.x =
-    Math.sin(t * DRIFT_FREQ) * DRIFT_AMP +
-    Math.sin(t * DRIFT_FREQ * 2.6 + 1.1) * DRIFT_AMP * 0.38 +
-    Math.sin(t * DRIFT_FREQ * 0.7 + 2.4) * DRIFT_AMP * 0.2;
-
-  const move = SPEED_BASE * dt;
-
-  for (let i = trees.length - 1; i >= 0; i--) {
-    const tr = trees[i];
-    tr.z -= move;
-
-    // Fade in
-    if (tr.fade < 1) tr.fade = Math.min(1, tr.fade + dt * 0.0015);
-
-    // Recycle: wait 1s after passing near threshold, then jump back
-    if (tr.z < 1.1) {
-      tr.recycleWait += dt;
-      if (tr.recycleWait >= RECYCLE_DELAY_MS) {
-        tr.z += rowsPerCol * Z_SPACING;
-        tr.fade = 0;
-        tr.recycleWait = 0;
-      }
-    } else {
-      tr.recycleWait = 0;
-    }
-  }
-
-  // Painter's order: far first
-  trees.sort((a, b) => b.z - a.z);
-}
-
-// ─── frame loop ──────────────────────────────────────────────────────────────
-let lastT = 0;
-
-function frame(t) {
-  const dt = lastT ? Math.min(t - lastT, 48) : 16;
-  lastT = t;
-
-  drawBackground();
-  update(dt, t);
-
-  for (let i = 0; i < trees.length; i++) drawTree(trees[i]);
-
-  // Depth-fog pass
-  ctx.fillStyle = g.fog;
-  ctx.fillRect(0, 0, W, H);
-
-  requestAnimationFrame(frame);
-}
-
-// ─── boot ─────────────────────────────────────────────────────────────────────
-resize();
-window.addEventListener("resize", resize);
-requestAnimationFrame(frame);
+})();
