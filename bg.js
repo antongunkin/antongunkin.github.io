@@ -1,140 +1,207 @@
-// const c = document.querySelector("canvas");
-// const gl = c.getContext("webgl2");
+const canvas = document.querySelector("canvas");
+const ctx = canvas.getContext("2d");
 
-var vertexShaderSource = `#version 300 es
+const treeCount = 260;
+const trees = [];
 
-// an attribute is an input (in) to a vertex shader.
-// It will receive data from a buffer
-in vec4 a_position;
+const SPAWN_NEAR = 24;
+const SPAWN_FAR = 42;
+const FOREST_HALF_WIDTH = 9;
 
-// all shaders have a main function
-void main() {
+let w = 0;
+let h = 0;
+let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-  // gl_Position is a special variable a vertex shader
-  // is responsible for setting
-  gl_Position = a_position;
-}
-`;
+const scene = {
+  horizon: 0,
+  fov: 0,
+  speed: 0.64,
+  pathHalfWidth: 1.7,
+  cameraY: 0,
+  pitch: 0.45,
+};
 
-var fragmentShaderSource = `#version 300 es
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-// fragment shaders don't have a default precision so we need
-// to pick one. highp is a good default. It means "high precision"
-precision highp float;
-
-// we need to declare an output for the fragment shader
-out vec4 outColor;
-
-void main() {
-  // Just set the output to a constant redish-purple
-  outColor = vec4(1, 0, 0.5, 1);
-}
-`;
-
-function createShader(gl, type, source) {
-  var shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  var success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
-  if (success) {
-    return shader;
-  }
-
-  console.log(gl.getShaderInfoLog(shader)); // eslint-disable-line
-  gl.deleteShader(shader);
-  return undefined;
+  // lower camera, looking up
+  scene.horizon = h * 0.72;
+  scene.cameraY = h * 0.86;
+  scene.fov = Math.max(w, h) * 1.18;
 }
 
-function createProgram(gl, vertexShader, fragmentShader) {
-  var program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  var success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (success) {
-    return program;
-  }
-
-  console.log(gl.getProgramInfoLog(program)); // eslint-disable-line
-  gl.deleteProgram(program);
-  return undefined;
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
-function main() {
-  // Get A WebGL context
-  var canvas = document.querySelector("canvas");
-  var gl = canvas.getContext("webgl2");
-  if (!gl) {
-    return;
-  }
+function spawnTree(z = rand(SPAWN_NEAR, SPAWN_FAR), isRespawn = false) {
+  const x = rand(-FOREST_HALF_WIDTH, FOREST_HALF_WIDTH);
 
-  // create GLSL shaders, upload the GLSL source, compile the shaders
-  var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-  var fragmentShader = createShader(
-    gl,
-    gl.FRAGMENT_SHADER,
-    fragmentShaderSource,
+  trees.push({
+    x,
+    z,
+    trunk: rand(0.08, 0.14),
+    height: rand(1.4, 2.9),
+    hue: rand(112, 130),
+    age: isRespawn ? 0 : rand(700, 1800),
+  });
+}
+
+function project(x, z) {
+  const scale = scene.fov / z;
+  return {
+    sx: w * 0.5 + x * scale,
+    scale,
+  };
+}
+
+function drawBackground(t) {
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, "#1a2233");
+  sky.addColorStop(0.46, "#2d394f");
+  sky.addColorStop(1, "#0f1721");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+
+  // moon/sky glow
+  const skyGlow = ctx.createRadialGradient(
+    w * 0.5,
+    h * 0.18,
+    8,
+    w * 0.5,
+    h * 0.18,
+    w * 0.5,
   );
+  skyGlow.addColorStop(0, "rgba(205, 228, 255, 0.26)");
+  skyGlow.addColorStop(0.4, "rgba(165, 201, 245, 0.11)");
+  skyGlow.addColorStop(1, "rgba(165, 201, 245, 0)");
+  ctx.fillStyle = skyGlow;
+  ctx.fillRect(0, 0, w, h);
 
-  // Link the two shaders into a program
-  var program = createProgram(gl, vertexShader, fragmentShader);
+  // layered fog
+  const fogA = ctx.createLinearGradient(0, scene.horizon - h * 0.2, 0, h);
+  fogA.addColorStop(0, "rgba(170, 195, 220, 0)");
+  fogA.addColorStop(1, "rgba(170, 195, 220, 0.23)");
+  ctx.fillStyle = fogA;
+  ctx.fillRect(0, scene.horizon - h * 0.2, w, h);
 
-  // look up where the vertex data needs to go.
-  var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+  ctx.fillStyle = `rgba(185, 205, 226, ${0.09 + Math.sin(t * 0.0008) * 0.03})`;
+  ctx.fillRect(0, scene.horizon - h * 0.08, w, h);
 
-  // Create a buffer and put three 2d clip space points in it
-  var positionBuffer = gl.createBuffer();
-
-  // Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-  var positions = [0, 0, 0, 0.5, 0.7, 0];
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-  // Create a vertex array object (attribute state)
-  var vao = gl.createVertexArray();
-
-  // and make it the one we're currently working with
-  gl.bindVertexArray(vao);
-
-  // Turn on the attribute
-  gl.enableVertexAttribArray(positionAttributeLocation);
-
-  // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
-  var size = 2; // 2 components per iteration
-  var type = gl.FLOAT; // the data is 32bit floats
-  var normalize = false; // don't normalize the data
-  var stride = 0; // 0 = move forward size * sizeof(type) each iteration to get the next position
-  var offset = 0; // start at the beginning of the buffer
-  gl.vertexAttribPointer(
-    positionAttributeLocation,
-    size,
-    type,
-    normalize,
-    stride,
-    offset,
+  // center path glow to imply flying corridor
+  const glow = ctx.createRadialGradient(
+    w * 0.5,
+    h * 0.9,
+    4,
+    w * 0.5,
+    h * 0.9,
+    w * 0.65,
   );
-
-  // webglUtils.resizeCanvasToDisplaySize(gl.canvas);
-
-  // Tell WebGL how to convert from clip space to pixels
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-  // Clear the canvas
-  gl.clearColor(0, 0, 0, 0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
-  // Tell it to use our program (pair of shaders)
-  gl.useProgram(program);
-
-  // Bind the attribute/buffer set we want.
-  gl.bindVertexArray(vao);
-
-  // draw
-  var primitiveType = gl.TRIANGLES;
-  var offset = 0;
-  var count = 3;
-  gl.drawArrays(primitiveType, offset, count);
+  glow.addColorStop(0, "rgba(224, 240, 255, 0.14)");
+  glow.addColorStop(1, "rgba(224, 240, 255, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, scene.horizon, w, h - scene.horizon);
 }
 
-main();
+function drawTree(tree, dt) {
+  const p = project(tree.x, tree.z);
+  const pitchLift = (1 / Math.max(tree.z, 0.2)) * scene.pitch * 22;
+  const baseY = scene.cameraY + p.scale * 0.34 - pitchLift;
+  const trunkW = tree.trunk * p.scale;
+  const trunkH = tree.height * p.scale * 1.45;
+  const topY = baseY - trunkH;
+
+  // skip trees off-screen (with margin for blur)
+  if (p.sx < -160 || p.sx > w + 160 || topY > h + 80) return;
+
+  const blurPx = Math.min(12, 1.5 + (16 / Math.max(tree.z, 0.2)) * 0.18);
+  const smearX = (tree.x < 0 ? -1 : 1) * (scene.speed * 18 + dt * 0.03);
+  const fog = Math.min(0.9, 0.22 + tree.z / 26);
+  const fadeIn = Math.min(1, tree.age / 1000);
+  const visibility = fadeIn * (1 - fog * 0.22);
+
+  // motion smear
+  ctx.filter = `blur(${blurPx}px)`;
+  ctx.globalAlpha = 0.18 * visibility;
+  ctx.fillStyle = "rgba(210, 228, 240, 0.24)";
+  ctx.fillRect(p.sx - trunkW * 0.6 + smearX, topY, trunkW * 1.2, trunkH);
+
+  // trunk only (no top/canopy)
+  ctx.filter = "none";
+  ctx.globalAlpha = (0.95 - fog * 0.5) * visibility;
+  ctx.fillStyle = `hsl(${tree.hue}, 14%, ${10 + fog * 34}%)`;
+  ctx.fillRect(p.sx - trunkW * 0.5, topY, trunkW, trunkH);
+
+  // side glow on trunks
+  ctx.globalAlpha = 0.15 * visibility;
+  ctx.fillStyle = "rgba(192, 220, 246, 0.65)";
+  ctx.fillRect(p.sx - trunkW * 0.45, topY, trunkW * 0.18, trunkH);
+
+  // local fog veil around each trunk
+  ctx.filter = `blur(${Math.min(16, 4 + 20 / Math.max(tree.z, 1))}px)`;
+  ctx.globalAlpha = fog * 0.19 * visibility;
+  ctx.fillStyle = "rgba(214, 230, 245, 0.95)";
+  ctx.fillRect(
+    p.sx - trunkW * 1.8,
+    topY - trunkH * 0.05,
+    trunkW * 3.6,
+    trunkH * 1.08,
+  );
+  ctx.filter = "none";
+  ctx.globalAlpha = 1;
+}
+
+function update(dt, t) {
+  // subtle left-right sway to feel like flying
+  const sway = Math.sin(t * 0.00035) * 0.12;
+
+  for (let i = 0; i < trees.length; i++) {
+    const tree = trees[i];
+    tree.age += dt;
+    tree.z -= scene.speed * dt * 0.0034;
+    tree.x += sway * dt * 0.0012 * (tree.x < 0 ? -1 : 1);
+
+    if (tree.z < 0.12 || Math.abs(tree.x) > FOREST_HALF_WIDTH + 2) {
+      trees.splice(i, 1);
+      spawnTree(rand(SPAWN_NEAR, SPAWN_FAR), true);
+      i--;
+    }
+  }
+}
+
+function frame(t) {
+  const dt = Math.min(50, t - (frame.lastT || t));
+  frame.lastT = t;
+
+  drawBackground(t);
+  update(dt, t);
+
+  // far to near
+  trees.sort((a, b) => b.z - a.z);
+  for (let i = 0; i < trees.length; i++) {
+    drawTree(trees[i], dt);
+  }
+
+  // final cinematic haze/glow pass
+  const bloom = ctx.createLinearGradient(0, 0, 0, h);
+  bloom.addColorStop(0, "rgba(170, 190, 222, 0.09)");
+  bloom.addColorStop(0.55, "rgba(170, 190, 222, 0.03)");
+  bloom.addColorStop(1, "rgba(170, 190, 222, 0.14)");
+  ctx.fillStyle = bloom;
+  ctx.fillRect(0, 0, w, h);
+
+  requestAnimationFrame(frame);
+}
+
+resize();
+for (let i = 0; i < treeCount; i++) spawnTree(rand(0.15, SPAWN_FAR));
+requestAnimationFrame(frame);
+
+window.addEventListener("resize", resize);
