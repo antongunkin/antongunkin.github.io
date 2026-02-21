@@ -14,11 +14,15 @@ const DEPTH_NEAR = 8; // min spawn depth
 const GRID_COLS = 10; // forest matrix width  (x)
 const GRID_ROWS = 10; // forest matrix depth  (z)
 const SPEED_BASE = 0.004; // world units per ms
-const DRIFT_AMP = 0.35; // subtle drift only (no visible center corridor)
-const DRIFT_FREQ = 0.00008; // drift oscillation frequency
-const FOG_IN_Z = 3.5; // trees fade in from this distance to camera
-const X_SPACING = 2.55; // world-units between matrix columns
-const Z_SPACING = 2.1; // world-units between matrix rows
+const X_SPACING = 3.6; // world-units between matrix columns (more gap)
+const Z_SPACING = 3.2; // world-units between matrix rows (more gap)
+const X_JITTER = X_SPACING * 0.32; // break perfect columns to avoid center corridor look
+const RECYCLE_DELAY_MS = 1000; // wait before recycling near-camera trees
+
+// Snake camera lanes (matrix indexing): 5.5 -> 4.5 -> 5.5 -> 6.5 -> repeat
+const SNAKE_LANES = [5.5, 4.5, 5.5, 6.5, 5.5];
+const SNAKE_STEP_MS = 3200;
+
 const VIEW_ANGLE_MIN_DEG = 85;
 const VIEW_ANGLE_MAX_DEG = 115;
 const VIEW_SWEEP_MS = 20000; // 85->115 in 10s, then back in 10s
@@ -60,27 +64,36 @@ function randS(a, b) {
 // Number of rows per column and full Z-span — computed once when forest is built
 let rowsPerCol = 0;
 let worldZSpan = 0;
+let matrixHalfSpanX = 0;
 let forestReady = false;
+
+function laneToWorldX(laneIndex) {
+  return (laneIndex - (GRID_COLS + 1) * 0.5) * X_SPACING;
+}
+
+function smooth01(u) {
+  return u * u * (3 - 2 * u);
+}
 
 function buildForest() {
   trees.length = 0;
 
   // Dense matrix of trees — no center corridor or missing middle lane
-  const halfSpanX = (GRID_COLS - 1) * X_SPACING * 0.5;
+  matrixHalfSpanX = (GRID_COLS - 1) * X_SPACING * 0.5;
   rowsPerCol = GRID_ROWS;
   worldZSpan = rowsPerCol * Z_SPACING;
 
   for (let c = 0; c < GRID_COLS; c++) {
-    const cx = -halfSpanX + c * X_SPACING;
+    const cx = -matrixHalfSpanX + c * X_SPACING;
     const zPhase = randS(0, Z_SPACING);
     for (let row = 0; row < rowsPerCol; row++) {
       trees.push({
-        x: cx,
+        x: cx + randS(-X_JITTER, X_JITTER),
         z: (row + 1) * Z_SPACING + zPhase,
-        trunkW: randS(0.55, 1.1), // fixed per tree, no randomness at runtime
+        trunkW: randS(0.34, 0.72), // narrower trunks to keep ~1:3 tree-to-gap feel
         hue: randS(174, 216),
         lit: randS(0.55, 1.0),
-        fade: 1,
+        recycleWait: 0,
       });
     }
   }
@@ -138,7 +151,7 @@ function drawBackground() {
 }
 
 function drawTree(tree) {
-  const { x, z, trunkW, hue, lit, fade } = tree;
+  const { x, z, trunkW, hue, lit } = tree;
 
   // Oblique matrix view: rotate world in XZ by animated camera angle
   const rx = x * yawCos - z * yawSin;
@@ -151,15 +164,12 @@ function drawTree(tree) {
     Math.min(1, 1 - (rz - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)),
   );
 
-  // Near-clip fade (prevent popping when recycled)
-  const nearAlpha =
-    rz < FOG_IN_Z ? Math.max(0, (rz - 1.2) / (FOG_IN_Z - 1.2)) : 1;
   // Far fade so distant trees dissolve into background instead of hard-appearing
   const farAlpha = Math.max(
     0,
     Math.min(1, (DEPTH_FAR - rz) / (DEPTH_FAR * 0.22)),
   );
-  const alpha = fade * nearAlpha * farAlpha;
+  const alpha = farAlpha;
   if (alpha <= 0.002) return;
 
   const scale = cam.fov / rz;
@@ -216,11 +226,16 @@ function update(dt, t) {
   yawCos = Math.cos(yaw);
   yawSin = Math.sin(yaw);
 
-  // Smooth S-curve camera drift — no straight lines
-  cam.x =
-    Math.sin(t * DRIFT_FREQ) * DRIFT_AMP +
-    Math.sin(t * DRIFT_FREQ * 2.6 + 1.1) * DRIFT_AMP * 0.38 +
-    Math.sin(t * DRIFT_FREQ * 0.7 + 2.4) * DRIFT_AMP * 0.2;
+  // Snake flight between lanes: 5.5 -> 4.5 -> 5.5 -> 6.5 -> repeat
+  const segCount = SNAKE_LANES.length - 1;
+  const cycleMs = segCount * SNAKE_STEP_MS;
+  const localT = t % cycleMs;
+  const seg = Math.floor(localT / SNAKE_STEP_MS);
+  const laneU = (localT - seg * SNAKE_STEP_MS) / SNAKE_STEP_MS;
+  const s = smooth01(laneU);
+  const x0 = laneToWorldX(SNAKE_LANES[seg]);
+  const x1 = laneToWorldX(SNAKE_LANES[seg + 1]);
+  cam.x = x0 + (x1 - x0) * s;
 
   const move = SPEED_BASE * dt;
 
@@ -228,13 +243,16 @@ function update(dt, t) {
     const tr = trees[i];
     tr.z -= move;
 
-    // Fade in
-    if (tr.fade < 1) tr.fade = Math.min(1, tr.fade + dt * 0.0015);
-
     // Recycle to back of matrix cycle (persistent dense forest)
+    // Keep the tree for 1 second after crossing near threshold.
     if (tr.z < 1.1) {
-      tr.z += worldZSpan;
-      tr.fade = 0; // fade back in at distance
+      tr.recycleWait += dt;
+      if (tr.recycleWait >= RECYCLE_DELAY_MS) {
+        tr.z += worldZSpan;
+        tr.recycleWait = 0;
+      }
+    } else {
+      tr.recycleWait = 0;
     }
   }
 
