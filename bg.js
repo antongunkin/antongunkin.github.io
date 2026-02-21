@@ -13,15 +13,18 @@ const DEPTH_FAR = 170; // max spawn depth (for deep matrix visibility)
 const DEPTH_NEAR = 8; // min spawn depth
 const GRID_COLS = 10; // forest matrix width  (x)
 const GRID_ROWS = 10; // forest matrix depth  (z)
-const SPEED_BASE = 0.004; // world units per ms
+const SPEED_BASE = 0.002; // world units per ms
 const X_SPACING = 3.6; // world-units between matrix columns (more gap)
 const Z_SPACING = 3.2; // world-units between matrix rows (more gap)
 const X_JITTER = X_SPACING * 0.32; // break perfect columns to avoid center corridor look
 const RECYCLE_DELAY_MS = 1000; // wait before recycling near-camera trees
-
-// Snake camera lanes (matrix indexing): 4.5 -> 5.5 -> 6.5 -> 5.5 -> 5.5 -> 4.5 -> repeat
-const SNAKE_LANES = [4.5, 5.5, 6.5, 5.5, 5.5, 4.5];
-const SNAKE_STEP_MS = 3200;
+const CAM_DRIFT_SPEED_A = 0.00011; // smooth lateral oscillation
+const CAM_DRIFT_SPEED_B = 0.000047; // second band for natural motion
+const CAM_DRIFT_BLEND = 0.43; // contribution of second oscillation
+const CAM_DRIFT_SPAN = 0.44; // fraction of forest half-span used for drift
+const NEAR_FADE_START_Z = 7.2; // start fading trees as they approach camera
+const NEAR_FADE_END_Z = 1.1; // fully faded near camera
+const CENTER_FADE_BAND_X = 1.35; // only trees near center line get near-fade
 
 const VIEW_ANGLE_MIN_DEG = 85;
 const VIEW_ANGLE_MAX_DEG = 115;
@@ -66,14 +69,6 @@ let rowsPerCol = 0;
 let worldZSpan = 0;
 let matrixHalfSpanX = 0;
 let forestReady = false;
-
-function laneToWorldX(laneIndex) {
-  return (laneIndex - (GRID_COLS + 1) * 0.5) * X_SPACING;
-}
-
-function smooth01(u) {
-  return u * u * (3 - 2 * u);
-}
 
 function buildForest() {
   trees.length = 0;
@@ -164,12 +159,20 @@ function drawTree(tree) {
     Math.min(1, 1 - (rz - DEPTH_NEAR) / (DEPTH_FAR - DEPTH_NEAR)),
   );
 
-  // Far fade so distant trees dissolve into background instead of hard-appearing
-  const farAlpha = Math.max(
+  // Near fade so trees dissolve smoothly instead of clipping through camera.
+  const nearT = Math.max(
     0,
-    Math.min(1, (DEPTH_FAR - rz) / (DEPTH_FAR * 0.22)),
+    Math.min(1, (rz - NEAR_FADE_END_Z) / (NEAR_FADE_START_Z - NEAR_FADE_END_Z)),
   );
-  const alpha = farAlpha;
+  const nearAlpha = nearT * nearT * (3 - 2 * nearT);
+
+  // Apply near fade only around the center flight line; side trees stay visible.
+  const centerDx = Math.abs(rx - cam.x);
+  const centerT = Math.max(0, Math.min(1, centerDx / CENTER_FADE_BAND_X));
+  const sideKeep = centerT * centerT * (3 - 2 * centerT); // 0=center, 1=sides
+  const selectiveNearAlpha = nearAlpha + (1 - nearAlpha) * sideKeep;
+
+  const alpha = selectiveNearAlpha;
   if (alpha <= 0.002) return;
 
   const scale = cam.fov / rz;
@@ -226,16 +229,12 @@ function update(dt, t) {
   yawCos = Math.cos(yaw);
   yawSin = Math.sin(yaw);
 
-  // Snake flight between lanes: 5.5 -> 4.5 -> 5.5 -> 6.5 -> repeat
-  const segCount = SNAKE_LANES.length - 1;
-  const cycleMs = segCount * SNAKE_STEP_MS;
-  const localT = t % cycleMs;
-  const seg = Math.floor(localT / SNAKE_STEP_MS);
-  const laneU = (localT - seg * SNAKE_STEP_MS) / SNAKE_STEP_MS;
-  const s = smooth01(laneU);
-  const x0 = laneToWorldX(SNAKE_LANES[seg]);
-  const x1 = laneToWorldX(SNAKE_LANES[seg + 1]);
-  cam.x = x0 + (x1 - x0) * s;
+  // Smooth free-flight drift (no collision prevention).
+  const xAmp = matrixHalfSpanX * CAM_DRIFT_SPAN;
+  cam.x =
+    xAmp *
+    (Math.sin(t * CAM_DRIFT_SPEED_A) +
+      CAM_DRIFT_BLEND * Math.sin(t * CAM_DRIFT_SPEED_B + 1.8));
 
   const move = SPEED_BASE * dt;
 
