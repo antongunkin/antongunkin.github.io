@@ -1,7 +1,6 @@
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 
-const treeCount = 260;
 const trees = [];
 
 const SPAWN_NEAR = 24;
@@ -10,7 +9,16 @@ const FOREST_HALF_WIDTH = 9;
 
 let w = 0;
 let h = 0;
-let dpr = Math.min(window.devicePixelRatio || 1, 2);
+let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+let targetTreeCount = 220;
+
+const paints = {
+  sky: null,
+  skyGlow: null,
+  fogA: null,
+  centerGlow: null,
+  bloom: null,
+};
 
 const scene = {
   horizon: 0,
@@ -22,7 +30,7 @@ const scene = {
 };
 
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, 1.5);
   w = window.innerWidth;
   h = window.innerHeight;
   canvas.width = Math.floor(w * dpr);
@@ -35,23 +43,82 @@ function resize() {
   scene.horizon = h * 0.72;
   scene.cameraY = h * 0.86;
   scene.fov = Math.max(w, h) * 1.18;
+
+  targetTreeCount = Math.round(Math.max(150, Math.min(240, (w * h) / 7000)));
+
+  paints.sky = ctx.createLinearGradient(0, 0, 0, h);
+  paints.sky.addColorStop(0, "#1a2233");
+  paints.sky.addColorStop(0.46, "#2d394f");
+  paints.sky.addColorStop(1, "#0f1721");
+
+  paints.skyGlow = ctx.createRadialGradient(
+    w * 0.5,
+    h * 0.18,
+    8,
+    w * 0.5,
+    h * 0.18,
+    w * 0.5,
+  );
+  paints.skyGlow.addColorStop(0, "rgba(205, 228, 255, 0.26)");
+  paints.skyGlow.addColorStop(0.4, "rgba(165, 201, 245, 0.11)");
+  paints.skyGlow.addColorStop(1, "rgba(165, 201, 245, 0)");
+
+  paints.fogA = ctx.createLinearGradient(0, scene.horizon - h * 0.2, 0, h);
+  paints.fogA.addColorStop(0, "rgba(170, 195, 220, 0)");
+  paints.fogA.addColorStop(1, "rgba(170, 195, 220, 0.23)");
+
+  paints.centerGlow = ctx.createRadialGradient(
+    w * 0.5,
+    h * 0.9,
+    4,
+    w * 0.5,
+    h * 0.9,
+    w * 0.65,
+  );
+  paints.centerGlow.addColorStop(0, "rgba(224, 240, 255, 0.14)");
+  paints.centerGlow.addColorStop(1, "rgba(224, 240, 255, 0)");
+
+  paints.bloom = ctx.createLinearGradient(0, 0, 0, h);
+  paints.bloom.addColorStop(0, "rgba(170, 190, 222, 0.09)");
+  paints.bloom.addColorStop(0.55, "rgba(170, 190, 222, 0.03)");
+  paints.bloom.addColorStop(1, "rgba(170, 190, 222, 0.14)");
+
+  while (trees.length < targetTreeCount) {
+    spawnTree(rand(0.15, SPAWN_FAR));
+  }
+  while (trees.length > targetTreeCount) {
+    trees.pop();
+  }
+  trees.sort((a, b) => b.z - a.z);
 }
 
 function rand(min, max) {
   return Math.random() * (max - min) + min;
 }
 
-function spawnTree(z = rand(SPAWN_NEAR, SPAWN_FAR), isRespawn = false) {
+function spawnTree(
+  z = rand(SPAWN_NEAR, SPAWN_FAR),
+  isRespawn = false,
+  insertAtFront = false,
+) {
   const x = rand(-FOREST_HALF_WIDTH, FOREST_HALF_WIDTH);
 
-  trees.push({
+  const tree = {
     x,
     z,
     trunk: rand(0.08, 0.14),
     height: rand(1.4, 2.9),
     hue: rand(112, 130),
     age: isRespawn ? 0 : rand(700, 1800),
-  });
+  };
+
+  if (insertAtFront) {
+    trees.unshift(tree);
+  } else {
+    trees.push(tree);
+  }
+
+  return tree;
 }
 
 function project(x, z) {
@@ -63,50 +130,22 @@ function project(x, z) {
 }
 
 function drawBackground(t) {
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, "#1a2233");
-  sky.addColorStop(0.46, "#2d394f");
-  sky.addColorStop(1, "#0f1721");
-  ctx.fillStyle = sky;
+  ctx.fillStyle = paints.sky;
   ctx.fillRect(0, 0, w, h);
 
   // moon/sky glow
-  const skyGlow = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.18,
-    8,
-    w * 0.5,
-    h * 0.18,
-    w * 0.5,
-  );
-  skyGlow.addColorStop(0, "rgba(205, 228, 255, 0.26)");
-  skyGlow.addColorStop(0.4, "rgba(165, 201, 245, 0.11)");
-  skyGlow.addColorStop(1, "rgba(165, 201, 245, 0)");
-  ctx.fillStyle = skyGlow;
+  ctx.fillStyle = paints.skyGlow;
   ctx.fillRect(0, 0, w, h);
 
   // layered fog
-  const fogA = ctx.createLinearGradient(0, scene.horizon - h * 0.2, 0, h);
-  fogA.addColorStop(0, "rgba(170, 195, 220, 0)");
-  fogA.addColorStop(1, "rgba(170, 195, 220, 0.23)");
-  ctx.fillStyle = fogA;
+  ctx.fillStyle = paints.fogA;
   ctx.fillRect(0, scene.horizon - h * 0.2, w, h);
 
   ctx.fillStyle = `rgba(185, 205, 226, ${0.09 + Math.sin(t * 0.0008) * 0.03})`;
   ctx.fillRect(0, scene.horizon - h * 0.08, w, h);
 
   // center path glow to imply flying corridor
-  const glow = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.9,
-    4,
-    w * 0.5,
-    h * 0.9,
-    w * 0.65,
-  );
-  glow.addColorStop(0, "rgba(224, 240, 255, 0.14)");
-  glow.addColorStop(1, "rgba(224, 240, 255, 0)");
-  ctx.fillStyle = glow;
+  ctx.fillStyle = paints.centerGlow;
   ctx.fillRect(0, scene.horizon, w, h - scene.horizon);
 }
 
@@ -120,15 +159,21 @@ function drawTree(tree, dt) {
 
   // skip trees off-screen (with margin for blur)
   if (p.sx < -160 || p.sx > w + 160 || topY > h + 80) return;
+  if (trunkW < 0.22) return;
 
-  const blurPx = Math.min(12, 1.5 + (16 / Math.max(tree.z, 0.2)) * 0.18);
+  const blurPx = Math.min(8, 1.2 + (12 / Math.max(tree.z, 0.2)) * 0.15);
   const smearX = (tree.x < 0 ? -1 : 1) * (scene.speed * 18 + dt * 0.03);
   const fog = Math.min(0.9, 0.22 + tree.z / 26);
   const fadeIn = Math.min(1, tree.age / 1000);
   const visibility = fadeIn * (1 - fog * 0.22);
+  const near = tree.z < 10;
 
   // motion smear
-  ctx.filter = `blur(${blurPx}px)`;
+  if (near && trunkW > 0.9) {
+    ctx.filter = `blur(${blurPx}px)`;
+  } else {
+    ctx.filter = "none";
+  }
   ctx.globalAlpha = 0.18 * visibility;
   ctx.fillStyle = "rgba(210, 228, 240, 0.24)";
   ctx.fillRect(p.sx - trunkW * 0.6 + smearX, topY, trunkW * 1.2, trunkH);
@@ -140,21 +185,25 @@ function drawTree(tree, dt) {
   ctx.fillRect(p.sx - trunkW * 0.5, topY, trunkW, trunkH);
 
   // side glow on trunks
-  ctx.globalAlpha = 0.15 * visibility;
-  ctx.fillStyle = "rgba(192, 220, 246, 0.65)";
-  ctx.fillRect(p.sx - trunkW * 0.45, topY, trunkW * 0.18, trunkH);
+  if (trunkW > 0.7) {
+    ctx.globalAlpha = 0.15 * visibility;
+    ctx.fillStyle = "rgba(192, 220, 246, 0.65)";
+    ctx.fillRect(p.sx - trunkW * 0.45, topY, trunkW * 0.18, trunkH);
+  }
 
-  // local fog veil around each trunk
-  ctx.filter = `blur(${Math.min(16, 4 + 20 / Math.max(tree.z, 1))}px)`;
-  ctx.globalAlpha = fog * 0.19 * visibility;
-  ctx.fillStyle = "rgba(214, 230, 245, 0.95)";
-  ctx.fillRect(
-    p.sx - trunkW * 1.8,
-    topY - trunkH * 0.05,
-    trunkW * 3.6,
-    trunkH * 1.08,
-  );
-  ctx.filter = "none";
+  // local fog veil around each trunk (near only for performance)
+  if (tree.z < 12) {
+    ctx.filter = `blur(${Math.min(10, 3 + 12 / Math.max(tree.z, 1))}px)`;
+    ctx.globalAlpha = fog * 0.16 * visibility;
+    ctx.fillStyle = "rgba(214, 230, 245, 0.95)";
+    ctx.fillRect(
+      p.sx - trunkW * 1.8,
+      topY - trunkH * 0.05,
+      trunkW * 3.6,
+      trunkH * 1.08,
+    );
+    ctx.filter = "none";
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -170,7 +219,7 @@ function update(dt, t) {
 
     if (tree.z < 0.12 || Math.abs(tree.x) > FOREST_HALF_WIDTH + 2) {
       trees.splice(i, 1);
-      spawnTree(rand(SPAWN_NEAR, SPAWN_FAR), true);
+      spawnTree(rand(SPAWN_NEAR, SPAWN_FAR), true, true);
       i--;
     }
   }
@@ -183,25 +232,19 @@ function frame(t) {
   drawBackground(t);
   update(dt, t);
 
-  // far to near
-  trees.sort((a, b) => b.z - a.z);
+  // far to near (order is maintained without per-frame sort)
   for (let i = 0; i < trees.length; i++) {
     drawTree(trees[i], dt);
   }
 
   // final cinematic haze/glow pass
-  const bloom = ctx.createLinearGradient(0, 0, 0, h);
-  bloom.addColorStop(0, "rgba(170, 190, 222, 0.09)");
-  bloom.addColorStop(0.55, "rgba(170, 190, 222, 0.03)");
-  bloom.addColorStop(1, "rgba(170, 190, 222, 0.14)");
-  ctx.fillStyle = bloom;
+  ctx.fillStyle = paints.bloom;
   ctx.fillRect(0, 0, w, h);
 
   requestAnimationFrame(frame);
 }
 
 resize();
-for (let i = 0; i < treeCount; i++) spawnTree(rand(0.15, SPAWN_FAR));
 requestAnimationFrame(frame);
 
 window.addEventListener("resize", resize);
