@@ -11,18 +11,20 @@ const ctx = canvas.getContext("2d");
 // ─── tunables ────────────────────────────────────────────────────────────────
 const DEPTH_FAR = 170; // max spawn depth (for deep matrix visibility)
 const DEPTH_NEAR = 8; // min spawn depth
-const GRID_COLS = 100; // forest matrix width  (x)
-const GRID_ROWS = 100; // forest matrix depth  (z)
-const SPEED_BASE = 0.008; // world units per ms
+const GRID_COLS = 10; // forest matrix width  (x)
+const GRID_ROWS = 10; // forest matrix depth  (z)
+const SPEED_BASE = 0.004; // world units per ms
 const DRIFT_AMP = 0.35; // subtle drift only (no visible center corridor)
 const DRIFT_FREQ = 0.00008; // drift oscillation frequency
 const FOG_IN_Z = 3.5; // trees fade in from this distance to camera
 const X_SPACING = 2.55; // world-units between matrix columns
 const Z_SPACING = 2.1; // world-units between matrix rows
-const VIEW_ANGLE_DEG = 65; // requested oblique view (vs straight-on 90°)
-const VIEW_YAW = ((90 - VIEW_ANGLE_DEG) * Math.PI) / 180;
-const YAW_COS = Math.cos(VIEW_YAW);
-const YAW_SIN = Math.sin(VIEW_YAW);
+const VIEW_ANGLE_MIN_DEG = 85;
+const VIEW_ANGLE_MAX_DEG = 115;
+const VIEW_SWEEP_MS = 20000; // 85->115 in 10s, then back in 10s
+
+let yawCos = 1;
+let yawSin = 0;
 
 // ─── state ───────────────────────────────────────────────────────────────────
 let W = 0,
@@ -138,9 +140,9 @@ function drawBackground() {
 function drawTree(tree) {
   const { x, z, trunkW, hue, lit, fade } = tree;
 
-  // Oblique matrix view: rotate world in XZ so forest is seen at ~65°
-  const rx = x * YAW_COS - z * YAW_SIN;
-  const rz = x * YAW_SIN + z * YAW_COS;
+  // Oblique matrix view: rotate world in XZ by animated camera angle
+  const rx = x * yawCos - z * yawSin;
+  const rz = x * yawSin + z * yawCos;
   if (rz <= 0.5) return;
 
   // Depth 0=far 1=close
@@ -205,6 +207,15 @@ function drawTree(tree) {
 
 // ─── update ───────────────────────────────────────────────────────────────────
 function update(dt, t) {
+  // Angle ping-pong: 65° -> 130° (10s) -> 65° (10s), repeat forever
+  const p = (t % (VIEW_SWEEP_MS * 2)) / VIEW_SWEEP_MS; // [0..2)
+  const u = p <= 1 ? p : 2 - p; // [0..1..0]
+  const viewAngleDeg =
+    VIEW_ANGLE_MIN_DEG + (VIEW_ANGLE_MAX_DEG - VIEW_ANGLE_MIN_DEG) * u;
+  const yaw = ((90 - viewAngleDeg) * Math.PI) / 180;
+  yawCos = Math.cos(yaw);
+  yawSin = Math.sin(yaw);
+
   // Smooth S-curve camera drift — no straight lines
   cam.x =
     Math.sin(t * DRIFT_FREQ) * DRIFT_AMP +
