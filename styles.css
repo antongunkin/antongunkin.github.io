@@ -1,4 +1,6 @@
 :root {
+  --text-color: #000;
+
   /* Sky gradient */
   --sky-1: #b8f2a8;
   --sky-2: #72e4b8;
@@ -21,6 +23,27 @@
   --tree-hue-min: 174;
   --tree-hue-max: 216;
   --tree-sat: 58;
+}
+
+html {
+  color: var(--text-color);
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen-Sans,
+    Ubuntu,
+    Cantarell,
+    "Helvetica Neue",
+    sans-serif;
+  font-size: 112.5%;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  line-height: 1.44444;
 }
 
 html,
