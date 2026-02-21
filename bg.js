@@ -40,8 +40,8 @@ function resize() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // lower camera, looking up
-  scene.horizon = h * 0.72;
-  scene.cameraY = h * 0.86;
+  scene.horizon = h * 1.04;
+  scene.cameraY = h * 1.12;
   scene.fov = Math.max(w, h) * 1.18;
 
   targetTreeCount = Math.round(Math.max(150, Math.min(240, (w * h) / 7000)));
@@ -106,8 +106,8 @@ function spawnTree(
   const tree = {
     x,
     z,
-    trunk: rand(0.08, 0.14),
-    height: rand(1.4, 2.9),
+    trunk: rand(0.14, 0.24),
+    height: rand(2.8, 4.6),
     hue: rand(112, 130),
     age: isRespawn ? 0 : rand(700, 1800),
   };
@@ -151,59 +151,41 @@ function drawBackground(t) {
 
 function drawTree(tree, dt) {
   const p = project(tree.x, tree.z);
-  const pitchLift = (1 / Math.max(tree.z, 0.2)) * scene.pitch * 22;
+  const pitchLift = (1 / Math.max(tree.z, 0.2)) * scene.pitch * 32;
   const baseY = scene.cameraY + p.scale * 0.34 - pitchLift;
   const trunkW = tree.trunk * p.scale;
-  const trunkH = tree.height * p.scale * 1.45;
+  const trunkH = tree.height * p.scale * 1.9;
   const topY = baseY - trunkH;
 
   // skip trees off-screen (with margin for blur)
   if (p.sx < -160 || p.sx > w + 160 || topY > h + 80) return;
   if (trunkW < 0.22) return;
 
-  const blurPx = Math.min(8, 1.2 + (12 / Math.max(tree.z, 0.2)) * 0.15);
-  const smearX = (tree.x < 0 ? -1 : 1) * (scene.speed * 18 + dt * 0.03);
-  const fog = Math.min(0.9, 0.22 + tree.z / 26);
-  const fadeIn = Math.min(1, tree.age / 1000);
-  const visibility = fadeIn * (1 - fog * 0.22);
-  const near = tree.z < 10;
+  // crop trunk to viewport so bottoms/tops are not visible
+  const visibleTop = Math.max(0, topY);
+  const visibleBottom = Math.min(h, baseY);
+  if (visibleBottom <= visibleTop) return;
 
-  // motion smear
-  if (near && trunkW > 0.9) {
-    ctx.filter = `blur(${blurPx}px)`;
-  } else {
-    ctx.filter = "none";
-  }
-  ctx.globalAlpha = 0.18 * visibility;
-  ctx.fillStyle = "rgba(210, 228, 240, 0.24)";
-  ctx.fillRect(p.sx - trunkW * 0.6 + smearX, topY, trunkW * 1.2, trunkH);
-
-  // trunk only (no top/canopy)
+  // trunk only (no top/canopy), fully opaque
   ctx.filter = "none";
-  ctx.globalAlpha = (0.95 - fog * 0.5) * visibility;
-  ctx.fillStyle = `hsl(${tree.hue}, 14%, ${10 + fog * 34}%)`;
-  ctx.fillRect(p.sx - trunkW * 0.5, topY, trunkW, trunkH);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = `hsl(${tree.hue}, 16%, 20%)`;
+  ctx.fillRect(
+    p.sx - trunkW * 0.5,
+    visibleTop,
+    trunkW,
+    visibleBottom - visibleTop,
+  );
 
-  // side glow on trunks
-  if (trunkW > 0.7) {
-    ctx.globalAlpha = 0.15 * visibility;
-    ctx.fillStyle = "rgba(192, 220, 246, 0.65)";
-    ctx.fillRect(p.sx - trunkW * 0.45, topY, trunkW * 0.18, trunkH);
-  }
+  // subtle bark band (also opaque)
+  ctx.fillStyle = `hsl(${tree.hue}, 14%, 14%)`;
+  ctx.fillRect(
+    p.sx - trunkW * 0.18,
+    visibleTop,
+    trunkW * 0.22,
+    visibleBottom - visibleTop,
+  );
 
-  // local fog veil around each trunk (near only for performance)
-  if (tree.z < 12) {
-    ctx.filter = `blur(${Math.min(10, 3 + 12 / Math.max(tree.z, 1))}px)`;
-    ctx.globalAlpha = fog * 0.16 * visibility;
-    ctx.fillStyle = "rgba(214, 230, 245, 0.95)";
-    ctx.fillRect(
-      p.sx - trunkW * 1.8,
-      topY - trunkH * 0.05,
-      trunkW * 3.6,
-      trunkH * 1.08,
-    );
-    ctx.filter = "none";
-  }
   ctx.globalAlpha = 1;
 }
 
