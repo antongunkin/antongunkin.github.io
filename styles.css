@@ -1,3 +1,28 @@
+:root {
+  /* Sky gradient */
+  --sky-1: #b8f2a8;
+  --sky-2: #72e4b8;
+  --sky-3: #38b8d8;
+  --sky-4: #2255c4;
+  --sky-5: #1e34a0;
+  --sky-6: #100b58;
+
+  /* Fog overlay */
+  --fog-1: #64d2eb;
+  --fog-2: #3787dc;
+  --fog-3: #3782d7;
+  --fog-4: #1c41aa;
+  --fog-1-a: 0.1;
+  --fog-2-a: 0.2;
+  --fog-3-a: 0.2;
+  --fog-4-a: 0.1;
+
+  /* Tree palette */
+  --tree-hue-min: 174;
+  --tree-hue-max: 216;
+  --tree-sat: 58;
+}
+
 html,
 body {
   padding: 0;

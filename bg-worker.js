@@ -2,14 +2,15 @@
  * Forest fly-through — optimised renderer.
  * Runs in a Web Worker (OffscreenCanvas) or on the main thread as fallback.
  *
- * Key optimisations over the original:
+ * Features:
+ *  • Theme-driven colours from CSS custom properties
+ *  • Smooth 5-second colour transitions on theme change
  *  • 1× DPR on mobile (≤ 768 CSS-px wide) — up to 4× fewer pixels
- *  • Per-tree gradient objects cached (rebuilt only on resize, not every frame)
- *  • Per-tree HSL colour strings pre-baked (zero string allocation in draw loop)
+ *  • Per-tree gradient objects cached (rebuilt only on resize / theme change)
+ *  • Per-tree HSL colour strings pre-baked
  *  • Insertion sort O(n) replaces Array.sort O(n log n) on nearly-sorted data
  *  • Pre-computed reciprocals eliminate divisions in the hot path
  *  • Off-screen and very-faint trees culled before any draw call
- *  • Gradient glow skipped entirely for barely-visible trees
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -55,7 +56,40 @@ const VP_DIVISOR = DEPTH_FAR * 4;
 const SEG_COUNT = VIEW_WAYPOINTS.length - 1;
 const SEG_MS = VIEW_SWEEP_MS / SEG_COUNT;
 const INV_SEG_MS = 1 / SEG_MS;
-const DEPTH_QUANT = 11; // quantisation levels for solid-body colour cache
+const DEPTH_QUANT = 11;
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Default theme (matches original hardcoded colours)                        */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const DEFAULT_THEME = {
+  sky: [
+    [184, 242, 168],
+    [114, 228, 184],
+    [56, 184, 216],
+    [34, 85, 196],
+    [30, 52, 160],
+    [16, 11, 88],
+  ],
+  fog: [
+    [100, 210, 235, 0.1],
+    [55, 135, 220, 0.2],
+    [55, 130, 215, 0.2],
+    [28, 65, 170, 0.1],
+  ],
+  treeHueMin: 174,
+  treeHueMax: 216,
+  treeSat: 58,
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Theme state                                                               */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const THEME_DURATION = 5000;
+let themeFrom = null;
+let themeTo = null;
+let cur = null; // current (possibly interpolated) theme snapshot
+let themeStartT = -1;
+let themeTransitioning = false;
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  Runtime state                                                             */
@@ -109,6 +143,120 @@ function sortByZDesc(arr) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Theme helpers                                                             */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+function rgbStr(c) {
+  return "rgb(" + (c[0] | 0) + "," + (c[1] | 0) + "," + (c[2] | 0) + ")";
+}
+function rgbaStr(c) {
+  return (
+    "rgba(" +
+    (c[0] | 0) +
+    "," +
+    (c[1] | 0) +
+    "," +
+    (c[2] | 0) +
+    "," +
+    c[3].toFixed(3) +
+    ")"
+  );
+}
+
+function cloneTheme(t) {
+  return {
+    sky: t.sky.map(function (c) {
+      return c.slice();
+    }),
+    fog: t.fog.map(function (c) {
+      return c.slice();
+    }),
+    treeHueMin: t.treeHueMin,
+    treeHueMax: t.treeHueMax,
+    treeSat: t.treeSat,
+  };
+}
+
+function lerpTheme(a, b, t) {
+  var sky = [];
+  for (var i = 0; i < a.sky.length; i++) {
+    sky.push([
+      a.sky[i][0] + (b.sky[i][0] - a.sky[i][0]) * t,
+      a.sky[i][1] + (b.sky[i][1] - a.sky[i][1]) * t,
+      a.sky[i][2] + (b.sky[i][2] - a.sky[i][2]) * t,
+    ]);
+  }
+  var fog = [];
+  for (var i = 0; i < a.fog.length; i++) {
+    fog.push([
+      a.fog[i][0] + (b.fog[i][0] - a.fog[i][0]) * t,
+      a.fog[i][1] + (b.fog[i][1] - a.fog[i][1]) * t,
+      a.fog[i][2] + (b.fog[i][2] - a.fog[i][2]) * t,
+      a.fog[i][3] + (b.fog[i][3] - a.fog[i][3]) * t,
+    ]);
+  }
+  return {
+    sky: sky,
+    fog: fog,
+    treeHueMin: a.treeHueMin + (b.treeHueMin - a.treeHueMin) * t,
+    treeHueMax: a.treeHueMax + (b.treeHueMax - a.treeHueMax) * t,
+    treeSat: a.treeSat + (b.treeSat - a.treeSat) * t,
+  };
+}
+
+function setThemeTarget(theme) {
+  themeFrom = cur ? cloneTheme(cur) : cloneTheme(theme);
+  themeTo = theme;
+  themeStartT = performance.now();
+  themeTransitioning = true;
+}
+
+function updateThemeTransition(ts) {
+  if (!themeTransitioning) return;
+  var elapsed = ts - themeStartT;
+  var t = clamp01(elapsed / THEME_DURATION);
+  t = easeInOut01(t);
+  cur = lerpTheme(themeFrom, themeTo, t);
+  rebuildAllColors();
+  if (t >= 1) {
+    themeTransitioning = false;
+  }
+}
+
+/** Rebuild all colour-dependent objects from the current theme snapshot. */
+function rebuildAllColors() {
+  if (!ctx) return;
+  buildSceneGradients();
+  rebuildTreeColors();
+  rebuildTreeGradients();
+}
+
+/** Regenerate per-tree solid-body and gradient-stop colour strings. */
+function rebuildTreeColors() {
+  for (var i = 0, n = trees.length; i < n; i++) {
+    var t = trees[i];
+    var hue = cur.treeHueMin + t.hueRng * (cur.treeHueMax - cur.treeHueMin);
+    var sat = cur.treeSat;
+
+    for (var d = 0; d < DEPTH_QUANT; d++) {
+      var l = 36 + (d / (DEPTH_QUANT - 1)) * 16;
+      t.solidColors[d] =
+        "hsl(" +
+        hue.toFixed(1) +
+        "," +
+        sat.toFixed(1) +
+        "%," +
+        l.toFixed(1) +
+        "%)";
+    }
+
+    t.gradStops[0] = "hsla(" + (hue - 14).toFixed(1) + ",92%,90%,0.75)";
+    t.gradStops[1] = "hsla(" + (hue - 7).toFixed(1) + ",84%,72%,0.42)";
+    t.gradStops[2] = "hsla(" + hue.toFixed(1) + ",72%,54%,0.13)";
+    t.gradStops[3] = "hsla(" + (hue + 10).toFixed(1) + ",66%,30%,0)";
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
 /*  Forest construction                                                       */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 function buildForest() {
@@ -122,24 +270,33 @@ function buildForest() {
 
   for (const cx of cols) {
     for (let row = 0; row < rowsPerCol; row++) {
-      /* PRNG call order MUST match original: x, z, trunkW, hue, lit */
+      /* PRNG call order MUST stay identical to original: x, z, trunkW, hue, lit */
       const treeX = cx + randS(-X_JITTER, X_JITTER);
       const treeZ = (row + 1) * Z_SPACING + randS(0, Z_SPACING * 0.3);
       const trunkW = randS(0.55, 1.1);
-      const hue = randS(174, 216);
+
+      /* hueRng replaces randS(174, 216) — same single rng() call position */
+      const hueRng = rng();
+      const hue = cur.treeHueMin + hueRng * (cur.treeHueMax - cur.treeHueMin);
       const lit = randS(0.55, 1.0);
 
-      /* Pre-bake quantised solid-body colour strings (hue is constant). */
+      const sat = cur.treeSat;
+
+      /* Pre-bake quantised solid-body colour strings. */
       const solidColors = new Array(DEPTH_QUANT);
       for (let d = 0; d < DEPTH_QUANT; d++) {
         const l = 36 + (d / (DEPTH_QUANT - 1)) * 16;
         solidColors[d] =
-          "hsl(" + hue.toFixed(1) + ",58%," + l.toFixed(1) + "%)";
+          "hsl(" +
+          hue.toFixed(1) +
+          "," +
+          sat.toFixed(1) +
+          "%," +
+          l.toFixed(1) +
+          "%)";
       }
 
-      /* Pre-bake gradient colour-stop strings.
-         Alpha is factored out via globalAlpha at draw time,
-         so stops use fixed alpha values. */
+      /* Pre-bake gradient colour-stop strings. */
       const gradStops = [
         "hsla(" + (hue - 14).toFixed(1) + ",92%,90%,0.75)",
         "hsla(" + (hue - 7).toFixed(1) + ",84%,72%,0.42)",
@@ -151,13 +308,13 @@ function buildForest() {
         x: treeX,
         z: treeZ,
         trunkW,
-        hue,
+        hueRng,
         lit,
         fade: 1,
         recycleWait: 0,
         solidColors,
         gradStops,
-        gradCache: null, // CanvasGradient — rebuilt on resize
+        gradCache: null, // CanvasGradient — rebuilt on resize / theme change
       });
     }
   }
@@ -170,19 +327,19 @@ function buildForest() {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 function buildSceneGradients() {
   const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0.0, "#b8f2a8");
-  bg.addColorStop(0.08, "#72e4b8");
-  bg.addColorStop(0.25, "#38b8d8");
-  bg.addColorStop(0.5, "#2255c4");
-  bg.addColorStop(0.74, "#1e34a0");
-  bg.addColorStop(1.0, "#100b58");
+  bg.addColorStop(0.0, rgbStr(cur.sky[0]));
+  bg.addColorStop(0.08, rgbStr(cur.sky[1]));
+  bg.addColorStop(0.25, rgbStr(cur.sky[2]));
+  bg.addColorStop(0.5, rgbStr(cur.sky[3]));
+  bg.addColorStop(0.74, rgbStr(cur.sky[4]));
+  bg.addColorStop(1.0, rgbStr(cur.sky[5]));
   g.bg = bg;
 
   const fog = ctx.createLinearGradient(0, 0, 0, H);
-  fog.addColorStop(0.0, "rgba(100,210,235,0.10)");
-  fog.addColorStop(0.44, "rgba(55,135,220,0.20)");
-  fog.addColorStop(0.56, "rgba(55,130,215,0.20)");
-  fog.addColorStop(1.0, "rgba(28,65,170,0.10)");
+  fog.addColorStop(0.0, rgbaStr(cur.fog[0]));
+  fog.addColorStop(0.44, rgbaStr(cur.fog[1]));
+  fog.addColorStop(0.56, rgbaStr(cur.fog[2]));
+  fog.addColorStop(1.0, rgbaStr(cur.fog[3]));
   g.fog = fog;
 }
 
@@ -219,8 +376,7 @@ function handleResize(w, h, deviceDpr) {
   topY = -(H * 0.12);
   bottomY = H * 1.12;
 
-  buildSceneGradients();
-  rebuildTreeGradients();
+  rebuildAllColors();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -342,6 +498,9 @@ function frame(ts) {
   const dt = lastT ? Math.min(ts - lastT, 48) : 16;
   lastT = ts;
 
+  /* Animate theme transition (no-op when not transitioning) */
+  updateThemeTransition(ts);
+
   /* Background */
   ctx.globalAlpha = 1;
   ctx.fillStyle = g.bg;
@@ -374,23 +533,30 @@ function scheduleFrame() {
 /*  Bootstrap — Web Worker vs main thread                                     */
 /* ═══════════════════════════════════════════════════════════════════════════ */
 if (IS_WORKER) {
-  /* ── Worker: receive canvas + resize messages from the loader ──────── */
+  /* ── Worker: receive canvas + resize + theme messages ─────────────── */
   self.onmessage = function (e) {
     var msg = e.data;
     if (msg.type === "init") {
       canvas = msg.canvas;
       ctx = canvas.getContext("2d");
+      cur = cloneTheme(msg.theme || DEFAULT_THEME);
+      themeTransitioning = false;
       buildForest();
       handleResize(msg.w, msg.h, msg.dpr);
       scheduleFrame();
     } else if (msg.type === "resize") {
       handleResize(msg.w, msg.h, msg.dpr);
+    } else if (msg.type === "theme") {
+      setThemeTarget(msg.theme);
     }
   };
 } else {
   /* ── Main-thread fallback (OffscreenCanvas not available) ──────────── */
   canvas = document.querySelector("canvas");
   ctx = canvas.getContext("2d");
+
+  cur = cloneTheme(window.__bgTheme || DEFAULT_THEME);
+  themeTransitioning = false;
 
   buildForest();
 
@@ -404,6 +570,11 @@ if (IS_WORKER) {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(resizeMain, 120);
   });
+
+  /* Expose setter so bg.js can push theme updates in fallback mode */
+  window.__bgSetTheme = function (theme) {
+    setThemeTarget(theme);
+  };
 
   scheduleFrame();
 }
