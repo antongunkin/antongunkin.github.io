@@ -16,7 +16,7 @@ const GRID_ROWS = 10; // forest matrix depth  (z)
 const SPEED_BASE = 0.004; // world units per ms
 const X_SPACING = 3.6; // world-units between matrix columns (more gap)
 const Z_SPACING = 3.2; // world-units between matrix rows (more gap)
-const X_JITTER = X_SPACING * 0.32; // break perfect columns to avoid center corridor look
+const X_JITTER = 0; // keep exact columns so camera can stay perfectly in gap centers
 const RECYCLE_DELAY_MS = 1000; // wait before recycling near-camera trees
 
 // Snake camera lanes (matrix indexing): 5.5 -> 4.5 -> 5.5 -> 6.5 -> repeat
@@ -36,7 +36,8 @@ let W = 0,
   dpr = 1;
 
 const cam = {
-  x: 0,
+  x: 0, // projected X (camera-space)
+  worldX: 0,
   fov: 0,
   horizonY: 0,
 };
@@ -235,7 +236,9 @@ function update(dt, t) {
   const s = smooth01(laneU);
   const x0 = laneToWorldX(SNAKE_LANES[seg]);
   const x1 = laneToWorldX(SNAKE_LANES[seg + 1]);
-  cam.x = x0 + (x1 - x0) * s;
+  cam.worldX = x0 + (x1 - x0) * s;
+  // Camera offset must be in rotated projection space to stay centered in gaps.
+  cam.x = cam.worldX * yawCos;
 
   const move = SPEED_BASE * dt;
 
