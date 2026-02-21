@@ -12,12 +12,12 @@ const ctx = canvas.getContext("2d");
 const DEPTH_FAR   = 55;         // max spawn depth
 const DEPTH_NEAR  = 8;          // min spawn depth
 const HALF_W      = 20;         // half-width of the forest lane (world units)
-const SAFE_LANE   = 1.6;        // camera corridor half-width (trees never here)
-const SPEED_BASE  = 0.016;      // world units per ms
+const SAFE_LANE   = 3.0;        // camera corridor half-width (trees never here)
+const SPEED_BASE  = 0.008;      // world units per ms
 const DRIFT_AMP   = 4.5;        // left/right camera drift amplitude
-const DRIFT_FREQ  = 0.00016;    // drift oscillation frequency
+const DRIFT_FREQ  = 0.00008;    // drift oscillation frequency
 const FOG_IN_Z    = 3.5;        // trees fade in from this distance to camera
-const TREE_COUNT  = 165;        // target trees alive at once
+const TREE_COUNT  = 75;         // target trees alive at once
 
 // ─── state ───────────────────────────────────────────────────────────────────
 let W = 0, H = 0, dpr = 1;
@@ -40,7 +40,7 @@ function spawnTree(z, preborn) {
   do { x = rand(-HALF_W, HALF_W); } while (Math.abs(x) < SAFE_LANE);
   trees.push({
     x, z,
-    trunkW: rand(0.25, 0.70),
+    trunkW: rand(0.60, 1.40),
     hue:    rand(174, 216),
     lit:    rand(0.5, 1.0),
     fade:   preborn ? 1 : 0,   // start invisible, fade in
@@ -80,16 +80,6 @@ function buildGradients() {
   bg.addColorStop(1.00, "#100b58");   // deep floor shadow
   g.bg = bg;
 
-  // Bright bloom at the vanishing point (where canopy opens)
-  const bx = W * 0.5, by = cam.horizonY;
-  const br = Math.max(W, H) * 0.72;
-  const bloom = ctx.createRadialGradient(bx, by, 0, bx, by, br);
-  bloom.addColorStop(0.00, "rgba(215, 255, 185, 0.60)");
-  bloom.addColorStop(0.10, "rgba(155, 248, 205, 0.25)");
-  bloom.addColorStop(0.38, "rgba(80,  195, 238, 0.09)");
-  bloom.addColorStop(1.00, "rgba(35,   90, 210, 0)");
-  g.bloom = bloom;
-
   // Atmospheric depth haze — softens far trees into the gradient
   const fog = ctx.createLinearGradient(0, 0, 0, H);
   fog.addColorStop(0.00, "rgba(100, 210, 235, 0.10)");
@@ -103,8 +93,6 @@ function buildGradients() {
 function drawBackground() {
   ctx.globalAlpha = 1;
   ctx.fillStyle = g.bg;
-  ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = g.bloom;
   ctx.fillRect(0, 0, W, H);
 }
 
@@ -210,12 +198,6 @@ function frame(t) {
   // Depth-fog pass
   ctx.fillStyle = g.fog;
   ctx.fillRect(0, 0, W, H);
-
-  // Bloom reinforcement
-  ctx.globalAlpha = 0.40;
-  ctx.fillStyle   = g.bloom;
-  ctx.fillRect(0, 0, W, H);
-  ctx.globalAlpha = 1;
 
   requestAnimationFrame(frame);
 }
