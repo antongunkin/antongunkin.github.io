@@ -3,32 +3,28 @@ const ctx = canvas.getContext("2d");
 
 const trees = [];
 
-const SPAWN_NEAR = 24;
-const SPAWN_FAR = 42;
-const FOREST_HALF_WIDTH = 9;
+const SPAWN_NEAR = 8;
+const SPAWN_FAR = 72;
+const FOREST_HALF_WIDTH = 16;
 
 let w = 0;
 let h = 0;
 let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-let targetTreeCount = 220;
+let targetTreeCount = 170;
 
 const paints = {
   sky: null,
-  skyGlow: null,
-  fogA: null,
-  centerGlow: null,
-  endGlow: null,
+  topSourceGlow: null,
   topFog: null,
+  depthFog: null,
   bloom: null,
 };
 
 const scene = {
-  horizon: 0,
   fov: 0,
-  speed: 0.64,
-  pathHalfWidth: 1.7,
-  cameraY: 0,
-  pitch: 0.85,
+  speed: 0.95,
+  vx: 0,
+  vy: 0,
 };
 
 function resize() {
@@ -41,66 +37,45 @@ function resize() {
   canvas.style.height = `${h}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // lower camera, looking up
-  scene.horizon = h * 1.2;
-  scene.cameraY = h * 1.3;
-  scene.fov = Math.max(w, h) * 1.18;
+  scene.vx = w * 0.5;
+  scene.vy = h * 0.02;
+  scene.fov = Math.max(w, h) * 1.42;
 
-  targetTreeCount = Math.round(Math.max(150, Math.min(240, (w * h) / 7000)));
+  targetTreeCount = Math.round(Math.max(120, Math.min(190, (w * h) / 8500)));
 
   paints.sky = ctx.createLinearGradient(0, 0, 0, h);
-  paints.sky.addColorStop(0, "#1a2233");
-  paints.sky.addColorStop(0.46, "#2d394f");
-  paints.sky.addColorStop(1, "#0f1721");
+  paints.sky.addColorStop(0, "#2e63d7");
+  paints.sky.addColorStop(0.34, "#2547c6");
+  paints.sky.addColorStop(0.7, "#3c2bb7");
+  paints.sky.addColorStop(1, "#1f136d");
 
-  paints.skyGlow = ctx.createRadialGradient(
+  paints.topSourceGlow = ctx.createRadialGradient(
     w * 0.5,
-    h * 0.18,
+    h * 0.01,
     8,
     w * 0.5,
-    h * 0.18,
-    w * 0.5,
+    h * 0.01,
+    Math.max(w, h) * 0.85,
   );
-  paints.skyGlow.addColorStop(0, "rgba(205, 228, 255, 0.26)");
-  paints.skyGlow.addColorStop(0.4, "rgba(165, 201, 245, 0.11)");
-  paints.skyGlow.addColorStop(1, "rgba(165, 201, 245, 0)");
-
-  paints.fogA = ctx.createLinearGradient(0, scene.horizon - h * 0.2, 0, h);
-  paints.fogA.addColorStop(0, "rgba(170, 195, 220, 0)");
-  paints.fogA.addColorStop(1, "rgba(170, 195, 220, 0.23)");
-
-  paints.centerGlow = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.9,
-    4,
-    w * 0.5,
-    h * 0.9,
-    w * 0.65,
-  );
-  paints.centerGlow.addColorStop(0, "rgba(224, 240, 255, 0.14)");
-  paints.centerGlow.addColorStop(1, "rgba(224, 240, 255, 0)");
-
-  paints.endGlow = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.06,
-    4,
-    w * 0.5,
-    h * 0.06,
-    Math.max(w, h) * 0.9,
-  );
-  paints.endGlow.addColorStop(0, "rgba(228, 240, 255, 0.38)");
-  paints.endGlow.addColorStop(0.35, "rgba(205, 225, 250, 0.2)");
-  paints.endGlow.addColorStop(1, "rgba(205, 225, 250, 0)");
+  paints.topSourceGlow.addColorStop(0, "rgba(225, 252, 212, 0.88)");
+  paints.topSourceGlow.addColorStop(0.16, "rgba(182, 245, 219, 0.46)");
+  paints.topSourceGlow.addColorStop(0.5, "rgba(110, 212, 235, 0.22)");
+  paints.topSourceGlow.addColorStop(1, "rgba(110, 212, 235, 0)");
 
   paints.topFog = ctx.createLinearGradient(0, 0, 0, h);
-  paints.topFog.addColorStop(0, "rgba(230, 238, 250, 0.26)");
-  paints.topFog.addColorStop(0.4, "rgba(210, 225, 242, 0.08)");
-  paints.topFog.addColorStop(1, "rgba(210, 225, 242, 0)");
+  paints.topFog.addColorStop(0, "rgba(202, 244, 226, 0.34)");
+  paints.topFog.addColorStop(0.42, "rgba(154, 214, 239, 0.09)");
+  paints.topFog.addColorStop(1, "rgba(154, 214, 239, 0)");
+
+  paints.depthFog = ctx.createLinearGradient(0, 0, 0, h);
+  paints.depthFog.addColorStop(0, "rgba(164, 222, 238, 0.14)");
+  paints.depthFog.addColorStop(0.55, "rgba(120, 162, 230, 0.08)");
+  paints.depthFog.addColorStop(1, "rgba(82, 98, 208, 0.18)");
 
   paints.bloom = ctx.createLinearGradient(0, 0, 0, h);
-  paints.bloom.addColorStop(0, "rgba(170, 190, 222, 0.09)");
-  paints.bloom.addColorStop(0.55, "rgba(170, 190, 222, 0.03)");
-  paints.bloom.addColorStop(1, "rgba(170, 190, 222, 0.14)");
+  paints.bloom.addColorStop(0, "rgba(156, 232, 238, 0.14)");
+  paints.bloom.addColorStop(0.5, "rgba(102, 166, 232, 0.06)");
+  paints.bloom.addColorStop(1, "rgba(62, 70, 185, 0.2)");
 
   while (trees.length < targetTreeCount) {
     spawnTree(rand(0.15, SPAWN_FAR));
@@ -125,9 +100,9 @@ function spawnTree(
   const tree = {
     x,
     z,
-    trunk: rand(0.42, 0.72),
-    height: rand(6.2, 10.5),
-    hue: rand(112, 130),
+    trunk: rand(0.5, 1.25),
+    height: rand(1, 1),
+    hue: rand(174, 214),
     age: isRespawn ? 0 : rand(700, 1800),
   };
 
@@ -152,111 +127,77 @@ function drawBackground(t) {
   ctx.fillStyle = paints.sky;
   ctx.fillRect(0, 0, w, h);
 
-  // moon/sky glow
-  ctx.fillStyle = paints.skyGlow;
+  // bright source at top-center
+  ctx.fillStyle = paints.topSourceGlow;
   ctx.fillRect(0, 0, w, h);
 
-  // layered fog
-  ctx.fillStyle = paints.fogA;
-  ctx.fillRect(0, scene.horizon - h * 0.2, w, h);
-
-  ctx.fillStyle = `rgba(185, 205, 226, ${0.09 + Math.sin(t * 0.0008) * 0.03})`;
-  ctx.fillRect(0, scene.horizon - h * 0.08, w, h);
-
-  // center path glow to imply flying corridor
-  ctx.fillStyle = paints.centerGlow;
-  ctx.fillRect(0, scene.horizon, w, h - scene.horizon);
-
-  // distant forest-end glow and high fog
-  ctx.fillStyle = paints.endGlow;
-  ctx.fillRect(0, 0, w, h);
+  // atmospheric fog layers
   ctx.fillStyle = paints.topFog;
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = paints.depthFog;
   ctx.fillRect(0, 0, w, h);
 }
 
 function drawTree(tree, dt) {
   const p = project(tree.x, tree.z);
-  const pitchLift = (1 / Math.max(tree.z, 0.2)) * scene.pitch * 60;
-  const baseY = scene.cameraY + p.scale * 0.34 - pitchLift;
-  const trunkW = tree.trunk * p.scale;
-  const trunkH = tree.height * p.scale * 2.4;
-  const topY = baseY - trunkH;
-
-  // skip trees off-screen (with margin for blur)
-  if (p.sx < -160 || p.sx > w + 160 || topY > h + 80) return;
-  if (trunkW < 0.22) return;
-
-  // crop trunk to viewport so bottoms/tops are not visible
-  const visibleTop = Math.max(0, topY);
-  const visibleBottom = Math.min(h, baseY);
-  if (visibleBottom <= visibleTop) return;
-
-  const farT = Math.min(1, Math.max(0, (tree.z - 7) / (SPAWN_FAR - 7)));
+  const farT = Math.min(
+    1,
+    Math.max(0, (tree.z - SPAWN_NEAR) / (SPAWN_FAR - SPAWN_NEAR)),
+  );
   const clarity = 1 - farT;
 
-  // trunk only (no top/canopy): near trees sharp, far trees fade in glow/fog
-  ctx.filter = "none";
-  ctx.globalAlpha = 0.08 + clarity * 0.92;
-  const trunkGradient = ctx.createLinearGradient(
-    0,
-    visibleTop,
-    0,
-    visibleBottom,
-  );
-  trunkGradient.addColorStop(
-    0,
-    `hsla(${tree.hue}, 30%, ${44 + clarity * 10}%, 1)`,
-  );
-  trunkGradient.addColorStop(
-    0.35,
-    `hsla(${tree.hue}, 20%, ${26 + clarity * 6}%, 1)`,
-  );
-  trunkGradient.addColorStop(
-    1,
-    `hsla(${tree.hue}, 16%, ${12 + clarity * 4}%, 1)`,
-  );
-  ctx.fillStyle = trunkGradient;
-  ctx.fillRect(
-    p.sx - trunkW * 0.5,
-    visibleTop,
-    trunkW,
-    visibleBottom - visibleTop,
-  );
+  const bottomX = p.sx;
+  const topX = scene.vx + tree.x * 8;
+  const bottomW = tree.trunk * p.scale * 1.9;
+  const topW = Math.max(1, bottomW * 0.04);
+  const topY = -10;
+  const bottomY = h + 30;
 
-  // bark shadow band
-  ctx.globalAlpha = 0.14 + clarity * 0.36;
-  ctx.fillStyle = `hsl(${tree.hue}, 14%, 12%)`;
-  ctx.fillRect(
-    p.sx - trunkW * 0.18,
-    visibleTop,
-    trunkW * 0.22,
-    visibleBottom - visibleTop,
-  );
+  if (bottomX + bottomW < -220 || bottomX - bottomW > w + 220) return;
 
-  // top-down glow streak on each trunk (vertical gradient feel)
-  const topGlow = ctx.createLinearGradient(0, visibleTop, 0, visibleBottom);
-  topGlow.addColorStop(0, `rgba(215, 232, 250, ${0.42 + clarity * 0.2})`);
-  topGlow.addColorStop(0.45, `rgba(190, 210, 235, ${0.12 + clarity * 0.12})`);
-  topGlow.addColorStop(1, "rgba(170, 190, 220, 0)");
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = topGlow;
-  ctx.fillRect(
-    p.sx - trunkW * 0.5,
-    visibleTop,
-    trunkW,
-    visibleBottom - visibleTop,
-  );
+  // base beam shape
+  ctx.globalAlpha = 0.04 + clarity * 0.3;
+  ctx.fillStyle = `hsl(${tree.hue}, 66%, ${46 + clarity * 12}%)`;
+  ctx.beginPath();
+  ctx.moveTo(topX - topW, topY);
+  ctx.lineTo(topX + topW, topY);
+  ctx.lineTo(bottomX + bottomW, bottomY);
+  ctx.lineTo(bottomX - bottomW, bottomY);
+  ctx.closePath();
+  ctx.fill();
 
-  // extra fog veil for very far trunks
-  if (farT > 0.55) {
-    ctx.globalAlpha = (farT - 0.55) * 0.7;
-    ctx.fillStyle = "rgba(220, 232, 246, 0.92)";
-    ctx.fillRect(
-      p.sx - trunkW * 0.62,
-      visibleTop,
-      trunkW * 1.24,
-      visibleBottom - visibleTop,
-    );
+  // vertical top-down glow gradient on each beam
+  const beamGlow = ctx.createLinearGradient(0, topY, 0, bottomY);
+  beamGlow.addColorStop(
+    0,
+    `hsla(${tree.hue - 10}, 84%, 84%, ${0.65 * (0.4 + clarity * 0.6)})`,
+  );
+  beamGlow.addColorStop(
+    0.42,
+    `hsla(${tree.hue - 4}, 78%, 68%, ${0.24 * (0.4 + clarity * 0.6)})`,
+  );
+  beamGlow.addColorStop(1, `hsla(${tree.hue + 6}, 75%, 46%, 0)`);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = beamGlow;
+  ctx.beginPath();
+  ctx.moveTo(topX - topW, topY);
+  ctx.lineTo(topX + topW, topY);
+  ctx.lineTo(bottomX + bottomW, bottomY);
+  ctx.lineTo(bottomX - bottomW, bottomY);
+  ctx.closePath();
+  ctx.fill();
+
+  // distant beams dissolve into fog
+  if (farT > 0.45) {
+    ctx.globalAlpha = (farT - 0.45) * 0.5;
+    ctx.fillStyle = "rgba(208, 236, 248, 0.95)";
+    ctx.beginPath();
+    ctx.moveTo(topX - topW * 1.2, topY);
+    ctx.lineTo(topX + topW * 1.2, topY);
+    ctx.lineTo(bottomX + bottomW * 1.14, bottomY);
+    ctx.lineTo(bottomX - bottomW * 1.14, bottomY);
+    ctx.closePath();
+    ctx.fill();
   }
 
   ctx.globalAlpha = 1;
@@ -296,7 +237,7 @@ function frame(t) {
   ctx.fillStyle = paints.bloom;
   ctx.fillRect(0, 0, w, h);
 
-  ctx.fillStyle = paints.endGlow;
+  ctx.fillStyle = paints.topSourceGlow;
   ctx.fillRect(0, 0, w, h);
 
   requestAnimationFrame(frame);
