@@ -224,13 +224,13 @@ function drawTree(tree) {
 
 // ─── update ───────────────────────────────────────────────────────────────────
 function update(dt, t) {
-  // Eased yaw sweep: 90° → 75° → 115° → 90°, repeating every 20s
+  // Sine-wave yaw sweep: 90° → 75° → 115° → 90°, repeating every 30s
   const segCount = VIEW_WAYPOINTS.length - 1;
   const segMs = VIEW_SWEEP_MS / segCount;
   const localT = t % VIEW_SWEEP_MS;
   const seg = Math.min(Math.floor(localT / segMs), segCount - 1);
   const segU = (localT - seg * segMs) / segMs;
-  const easedU = easeInOut01(segU);
+  const easedU = 0.5 - 0.5 * Math.cos(segU * Math.PI); // sine ease-in-out
   const viewAngleDeg =
     VIEW_WAYPOINTS[seg] +
     (VIEW_WAYPOINTS[seg + 1] - VIEW_WAYPOINTS[seg]) * easedU;
