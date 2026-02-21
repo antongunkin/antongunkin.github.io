@@ -13,7 +13,7 @@ const DEPTH_FAR = 55; // max spawn depth
 const DEPTH_NEAR = 8; // min spawn depth
 const HALF_W = 20; // half-width of the forest lane (world units)
 const SAFE_LANE = 3.0; // camera corridor half-width (trees never here)
-const SPEED_BASE = 0.008; // world units per ms
+const SPEED_BASE = 0.004; // world units per ms
 const DRIFT_AMP = 4.5; // left/right camera drift amplitude
 const DRIFT_FREQ = 0.00008; // drift oscillation frequency
 const X_SPACING = 4.0; // world-units between column centres (> 2×maxTrunkW)
@@ -23,7 +23,7 @@ const NEAR_FADE_START_Z = 7.2; // start fading center trees at this depth
 const NEAR_FADE_END_Z = 1.1; // fully faded at this depth
 const CENTER_FADE_BAND_X = 1.35; // only trees within this lateral distance fade out
 const VIEW_WAYPOINTS = [90, 75, 115, 90]; // camera yaw sweep keyframes (degrees)
-const VIEW_SWEEP_MS = 20000; // full cycle duration (20s)
+const VIEW_SWEEP_MS = 30000; // full cycle duration (30s)
 
 // ─── state ───────────────────────────────────────────────────────────────────
 let W = 0,
