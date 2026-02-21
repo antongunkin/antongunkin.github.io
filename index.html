@@ -12,8 +12,8 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       box-shadow: inset 0 0 0 2px red;
     }
   </style>
@@ -21,10 +21,7 @@
 
 <body>
   <canvas width="1024" height="512"></canvas>
-  <script type="text/javascript">
-    const c = document.querySelector('canvas');
-    const gl = c.getContext('webgl2');
-  </script>
+  <script src="bg.js"></script>
 </body>
 
 </html>
