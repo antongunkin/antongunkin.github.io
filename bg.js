@@ -4,16 +4,13 @@ const ctx = canvas.getContext("2d");
 const trees = [];
 
 const SPAWN_NEAR = 8;
-const SPAWN_FAR = 90;
-const FOREST_HALF_WIDTH = 24;
-const LANE_STEP = 6.8;
+const SPAWN_FAR = 72;
+const FOREST_HALF_WIDTH = 16;
 
 let w = 0;
 let h = 0;
 let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-let targetTreeCount = 280;
-let lanePositions = [];
-let nextLaneIndex = 0;
+let targetTreeCount = 170;
 
 const paints = {
   sky: null,
@@ -28,7 +25,6 @@ const scene = {
   speed: 0.95,
   vx: 0,
   vy: 0,
-  cameraX: 0,
 };
 
 function resize() {
@@ -45,18 +41,7 @@ function resize() {
   scene.vy = h * 0.02;
   scene.fov = Math.max(w, h) * 1.42;
 
-  lanePositions = [];
-  const laneOffset = LANE_STEP * 0.5;
-  for (
-    let x = -FOREST_HALF_WIDTH + laneOffset;
-    x <= FOREST_HALF_WIDTH - laneOffset;
-    x += LANE_STEP
-  ) {
-    lanePositions.push(Number(x.toFixed(3)));
-  }
-  nextLaneIndex = Math.floor(rand(0, lanePositions.length));
-
-  targetTreeCount = Math.round(Math.max(220, Math.min(380, (w * h) / 6000)));
+  targetTreeCount = Math.round(Math.max(120, Math.min(190, (w * h) / 8500)));
 
   paints.sky = ctx.createLinearGradient(0, 0, 0, h);
   paints.sky.addColorStop(0, "#2e63d7");
@@ -110,14 +95,12 @@ function spawnTree(
   isRespawn = false,
   insertAtFront = false,
 ) {
-  const lane = lanePositions[nextLaneIndex % lanePositions.length] || 0;
-  nextLaneIndex += 1;
-  const x = lane;
+  const x = rand(-FOREST_HALF_WIDTH, FOREST_HALF_WIDTH);
 
   const tree = {
     x,
     z,
-    trunk: rand(0.75, 1.875),
+    trunk: rand(0.5, 1.25),
     height: rand(1, 1),
     hue: rand(174, 214),
     age: isRespawn ? 0 : rand(700, 1800),
@@ -135,7 +118,7 @@ function spawnTree(
 function project(x, z) {
   const scale = scene.fov / z;
   return {
-    sx: w * 0.5 + (x - scene.cameraX) * scale,
+    sx: w * 0.5 + x * scale,
     scale,
   };
 }
@@ -164,7 +147,7 @@ function drawTree(tree, dt) {
   const clarity = 1 - farT;
 
   const bottomX = p.sx;
-  const topX = scene.vx + (tree.x - scene.cameraX) * 8;
+  const topX = scene.vx + tree.x * 8;
   const bottomW = tree.trunk * p.scale * 1.9;
   const topW = Math.max(1, bottomW * 0.04);
   const topY = -10;
@@ -221,13 +204,14 @@ function drawTree(tree, dt) {
 }
 
 function update(dt, t) {
-  // tiny global drift without changing equal spacing
-  scene.cameraX = Math.sin(t * 0.00023) * 0.25;
+  // subtle left-right sway to feel like flying
+  const sway = Math.sin(t * 0.00035) * 0.12;
 
   for (let i = 0; i < trees.length; i++) {
     const tree = trees[i];
     tree.age += dt;
     tree.z -= scene.speed * dt * 0.0034;
+    tree.x += sway * dt * 0.0012 * (tree.x < 0 ? -1 : 1);
 
     if (tree.z < 0.12 || Math.abs(tree.x) > FOREST_HALF_WIDTH + 2) {
       trees.splice(i, 1);
