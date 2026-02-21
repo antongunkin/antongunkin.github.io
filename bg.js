@@ -22,13 +22,14 @@ const CAM_DRIFT_SPEED_A = 0.00011; // smooth lateral oscillation
 const CAM_DRIFT_SPEED_B = 0.000047; // second band for natural motion
 const CAM_DRIFT_BLEND = 0.43; // contribution of second oscillation
 const CAM_DRIFT_SPAN = 0.44; // fraction of forest half-span used for drift
+const RESPAWN_FADE_MS = 1400; // fade-in time after tree respawn
 const NEAR_FADE_START_Z = 7.2; // start fading trees as they approach camera
 const NEAR_FADE_END_Z = 1.1; // fully faded near camera
 const CENTER_FADE_BAND_X = 1.35; // only trees near center line get near-fade
 
-const VIEW_ANGLE_MIN_DEG = 85;
-const VIEW_ANGLE_MAX_DEG = 115;
-const VIEW_SWEEP_MS = 20000; // 85->115 in 20s, then back in 20s
+const VIEW_ANGLE_MIN_DEG = 65;
+const VIEW_ANGLE_MAX_DEG = 135;
+const VIEW_SWEEP_MS = 20000; // 65->135 in 20s, then back in 20s
 
 let yawCos = 1;
 let yawSin = 0;
@@ -64,6 +65,10 @@ function randS(a, b) {
   return rng() * (b - a) + a;
 }
 
+function easeInOut01(u) {
+  return u * u * (3 - 2 * u);
+}
+
 // Number of rows per column and full Z-span — computed once when forest is built
 let rowsPerCol = 0;
 let worldZSpan = 0;
@@ -89,6 +94,7 @@ function buildForest() {
         hue: randS(174, 216),
         lit: randS(0.55, 1.0),
         recycleWait: 0,
+        respawnFade: 1,
       });
     }
   }
@@ -172,7 +178,9 @@ function drawTree(tree) {
   const sideKeep = centerT * centerT * (3 - 2 * centerT); // 0=center, 1=sides
   const selectiveNearAlpha = nearAlpha + (1 - nearAlpha) * sideKeep;
 
-  const alpha = selectiveNearAlpha;
+  const fadeT = Math.max(0, Math.min(1, tree.respawnFade));
+  const respawnAlpha = fadeT * fadeT * (3 - 2 * fadeT);
+  const alpha = selectiveNearAlpha * respawnAlpha;
   if (alpha <= 0.002) return;
 
   const scale = cam.fov / rz;
@@ -220,11 +228,12 @@ function drawTree(tree) {
 
 // ─── update ───────────────────────────────────────────────────────────────────
 function update(dt, t) {
-  // Angle ping-pong: 85° -> 115° (20s) -> 85° (20s), repeat forever
+  // Angle ping-pong with easing: min -> max -> min, repeat forever
   const p = (t % (VIEW_SWEEP_MS * 2)) / VIEW_SWEEP_MS; // [0..2)
   const u = p <= 1 ? p : 2 - p; // [0..1..0]
+  const easedU = easeInOut01(u);
   const viewAngleDeg =
-    VIEW_ANGLE_MIN_DEG + (VIEW_ANGLE_MAX_DEG - VIEW_ANGLE_MIN_DEG) * u;
+    VIEW_ANGLE_MIN_DEG + (VIEW_ANGLE_MAX_DEG - VIEW_ANGLE_MIN_DEG) * easedU;
   const yaw = ((90 - viewAngleDeg) * Math.PI) / 180;
   yawCos = Math.cos(yaw);
   yawSin = Math.sin(yaw);
@@ -241,6 +250,7 @@ function update(dt, t) {
   for (let i = trees.length - 1; i >= 0; i--) {
     const tr = trees[i];
     tr.z -= move;
+    tr.respawnFade = Math.min(1, tr.respawnFade + dt / RESPAWN_FADE_MS);
 
     // Recycle to back of matrix cycle (persistent dense forest)
     // Keep the tree for 1 second after crossing near threshold.
@@ -249,6 +259,7 @@ function update(dt, t) {
       if (tr.recycleWait >= RECYCLE_DELAY_MS) {
         tr.z += worldZSpan;
         tr.recycleWait = 0;
+        tr.respawnFade = 0;
       }
     } else {
       tr.recycleWait = 0;
