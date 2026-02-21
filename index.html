@@ -2,18 +2,66 @@
 <html>
 
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
+  <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
+    <input type="checkbox" id="theme-switch" disabled>
+    <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
+    <span class="theme-toggle__track"></span>
+    <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
+  </label>
+
   <main>
     Hello World!
   </main>
   <aside>
     <canvas width="1024" height="512"></canvas>
   </aside>
+
   <script src="bg.js"></script>
+  <script>
+    /**
+     * Theme detection & toggle.
+     * Runs after bg.js so the MutationObserver is already watching <html>.
+     * Changing the class triggers a smooth 5-second colour transition in the
+     * canvas renderer.
+     */
+    (function () {
+      var toggle = document.getElementById("theme-switch");
+      var html = document.documentElement;
+
+      function applyTheme(dark) {
+        html.classList.remove("theme-dark", "theme-light");
+        html.classList.add(dark ? "theme-dark" : "theme-light");
+      }
+
+      /* OS preference */
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+
+      /* Small delay so the user briefly sees the default palette,
+         then the canvas animates into the detected theme. */
+      setTimeout(function () {
+        toggle.checked = mq.matches;
+        toggle.disabled = false;
+        applyTheme(mq.matches);
+      }, 400);
+
+      /* Manual toggle */
+      toggle.addEventListener("change", function () {
+        applyTheme(toggle.checked);
+      });
+
+      /* React to OS preference changes in real time */
+      mq.addEventListener("change", function (e) {
+        toggle.checked = e.matches;
+        applyTheme(e.matches);
+      });
+    })();
+  </script>
 </body>
 
 </html>

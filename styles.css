@@ -25,6 +25,56 @@
   --tree-sat: 58;
 }
 
+/* ── Dark theme (30 % darker + white text) ───────────────────────── */
+html.theme-dark {
+  --text-color: #fff;
+
+  --sky-1: #81a976;
+  --sky-2: #50a081;
+  --sky-3: #278197;
+  --sky-4: #183c89;
+  --sky-5: #152470;
+  --sky-6: #0b083e;
+
+  --fog-1: #4693a5;
+  --fog-2: #275f9a;
+  --fog-3: #275b97;
+  --fog-4: #142e77;
+  --fog-1-a: 0.12;
+  --fog-2-a: 0.24;
+  --fog-3-a: 0.24;
+  --fog-4-a: 0.12;
+
+  --tree-hue-min: 174;
+  --tree-hue-max: 216;
+  --tree-sat: 45;
+}
+
+/* ── Light theme (bright, misty forest) ──────────────────────────── */
+html.theme-light {
+  --text-color: #1a1a1a;
+
+  --sky-1: #f0f5eb;
+  --sky-2: #dce8d4;
+  --sky-3: #c0d8d0;
+  --sky-4: #a0c0c8;
+  --sky-5: #88aec0;
+  --sky-6: #7098b0;
+
+  --fog-1: #d8eee8;
+  --fog-2: #c0d8d8;
+  --fog-3: #b8d0d0;
+  --fog-4: #a0c0c8;
+  --fog-1-a: 0.08;
+  --fog-2-a: 0.12;
+  --fog-3-a: 0.12;
+  --fog-4-a: 0.08;
+
+  --tree-hue-min: 110;
+  --tree-hue-max: 150;
+  --tree-sat: 30;
+}
+
 html {
   color: var(--text-color);
   font-family:
@@ -68,4 +118,86 @@ canvas {
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+/* ── Theme toggle ────────────────────────────────────────────────── */
+.theme-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: opacity 0.4s;
+}
+
+.theme-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.theme-toggle__icon {
+  color: var(--text-color);
+  opacity: 0.55;
+  transition:
+    opacity 0.3s,
+    color 0.3s;
+}
+
+.theme-toggle__track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 11px;
+  transition: background 0.3s;
+}
+
+.theme-toggle__track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.3s;
+}
+
+/* Checked → dark mode */
+.theme-toggle input:checked ~ .theme-toggle__track {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.theme-toggle input:checked ~ .theme-toggle__track::after {
+  transform: translateX(18px);
+}
+
+/* Highlight active icon */
+.theme-toggle input:not(:checked) ~ .theme-toggle__icon--sun {
+  opacity: 1;
+}
+
+.theme-toggle input:checked ~ .theme-toggle__icon--moon {
+  opacity: 1;
+}
+
+/* Disabled state (before OS detection) */
+.theme-toggle input:disabled ~ .theme-toggle__track {
+  opacity: 0.35;
+}
+
+.theme-toggle input:disabled ~ .theme-toggle__icon {
+  opacity: 0.25;
 }
