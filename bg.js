@@ -12,12 +12,12 @@ const ctx = canvas.getContext("2d");
 const DEPTH_FAR = 55; // max spawn depth
 const DEPTH_NEAR = 8; // min spawn depth
 const HALF_W = 20; // half-width of the forest lane (world units)
-const SAFE_LANE = 3.0; // camera corridor half-width (trees never here)
 const SPEED_BASE = 0.004; // world units per ms
 const DRIFT_AMP = 4.5; // left/right camera drift amplitude
 const DRIFT_FREQ = 0.00008; // drift oscillation frequency
-const X_SPACING = 4.0; // world-units between column centres (> 2×maxTrunkW)
-const Z_SPACING = 5.5; // world-units between rows within a column
+const X_SPACING = 3.6; // world-units between column centres
+const Z_SPACING = 4.8; // world-units between rows within a column
+const X_JITTER = X_SPACING * 0.3; // random lateral offset per tree
 const RECYCLE_DELAY_MS = 1000; // wait 1s before recycling near-camera trees
 const NEAR_FADE_START_Z = 7.2; // start fading center trees at this depth
 const NEAR_FADE_END_Z = 1.1; // fully faded at this depth
@@ -70,20 +70,20 @@ let forestReady = false;
 function buildForest() {
   trees.length = 0;
 
-  // Fixed X column positions — evenly spaced, outside safe lane, within half-width
+  // Column positions spanning full width — no center corridor
   const cols = [];
-  for (let x = SAFE_LANE + X_SPACING * 0.5; x <= HALF_W + 0.01; x += X_SPACING)
+  for (let x = 0; x <= HALF_W + 0.01; x += X_SPACING) {
     cols.push(x);
-  for (let x = SAFE_LANE + X_SPACING * 0.5; x <= HALF_W + 0.01; x += X_SPACING)
-    cols.push(-x);
+    if (x > 0) cols.push(-x);
+  }
 
   rowsPerCol = Math.ceil(DEPTH_FAR / Z_SPACING);
 
   for (const cx of cols) {
     for (let row = 0; row < rowsPerCol; row++) {
       trees.push({
-        x: cx,
-        z: (row + 1) * Z_SPACING,
+        x: cx + randS(-X_JITTER, X_JITTER),
+        z: (row + 1) * Z_SPACING + randS(0, Z_SPACING * 0.3),
         trunkW: randS(0.55, 1.1), // fixed per tree, no randomness at runtime
         hue: randS(174, 216),
         lit: randS(0.55, 1.0),
