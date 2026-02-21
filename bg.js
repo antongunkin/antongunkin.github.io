@@ -17,7 +17,8 @@ const SPEED_BASE  = 0.008;      // world units per ms
 const DRIFT_AMP   = 4.5;        // left/right camera drift amplitude
 const DRIFT_FREQ  = 0.00008;    // drift oscillation frequency
 const FOG_IN_Z    = 3.5;        // trees fade in from this distance to camera
-const TREE_COUNT  = 75;         // target trees alive at once
+const X_SPACING   = 4.0;        // world-units between column centres (> 2×maxTrunkW)
+const Z_SPACING   = 5.5;        // world-units between rows within a column
 
 // ─── state ───────────────────────────────────────────────────────────────────
 let W = 0, H = 0, dpr = 1;
@@ -32,19 +33,47 @@ const trees = [];
 const g = {};   // gradient cache
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-function rand(a, b) { return Math.random() * (b - a) + a; }
 
-function spawnTree(z, preborn) {
-  if (z == null) z = rand(DEPTH_NEAR, DEPTH_FAR);
-  let x;
-  do { x = rand(-HALF_W, HALF_W); } while (Math.abs(x) < SAFE_LANE);
-  trees.push({
-    x, z,
-    trunkW: rand(0.60, 1.40),
-    hue:    rand(174, 216),
-    lit:    rand(0.5, 1.0),
-    fade:   preborn ? 1 : 0,   // start invisible, fade in
-  });
+// Seeded PRNG (mulberry32) — same result every page load
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(0xABCD1234);
+function randS(a, b) { return rng() * (b - a) + a; }
+
+// Number of rows per column — computed once when forest is built
+let rowsPerCol = 0;
+let forestReady = false;
+
+function buildForest() {
+  trees.length = 0;
+
+  // Fixed X column positions — evenly spaced, outside safe lane, within half-width
+  const cols = [];
+  for (let x = SAFE_LANE + X_SPACING * 0.5; x <= HALF_W + 0.01; x += X_SPACING) cols.push( x);
+  for (let x = SAFE_LANE + X_SPACING * 0.5; x <= HALF_W + 0.01; x += X_SPACING) cols.push(-x);
+
+  rowsPerCol = Math.ceil(DEPTH_FAR / Z_SPACING);
+
+  for (const cx of cols) {
+    for (let row = 0; row < rowsPerCol; row++) {
+      trees.push({
+        x:      cx,
+        z:      (row + 1) * Z_SPACING,
+        trunkW: randS(0.55, 1.10),  // fixed per tree, no randomness at runtime
+        hue:    randS(174, 216),
+        lit:    randS(0.55, 1.0),
+        fade:   1,
+      });
+    }
+  }
+
+  trees.sort((a, b) => b.z - a.z);
 }
 
 function resize() {
@@ -62,10 +91,10 @@ function resize() {
 
   buildGradients();
 
-  // seed forest
-  const had = trees.length;
-  while (trees.length < TREE_COUNT) spawnTree(rand(0.8, DEPTH_FAR), true);
-  if (!had) trees.sort((a, b) => b.z - a.z);
+  if (!forestReady) {
+    buildForest();
+    forestReady = true;
+  }
 }
 
 function buildGradients() {
@@ -168,16 +197,12 @@ function update(dt, t) {
     // Fade in
     if (tr.fade < 1) tr.fade = Math.min(1, tr.fade + dt * 0.0015);
 
-    // Recycle past camera
+    // Recycle: jump back to far end of this tree's column cycle
     if (tr.z < 1.1) {
-      trees.splice(i, 1);
-      // New tree spawns far away and starts fading in
-      spawnTree(rand(DEPTH_FAR * 0.72, DEPTH_FAR), false);
+      tr.z += rowsPerCol * Z_SPACING;
+      tr.fade = 0;   // fade back in at distance
     }
   }
-
-  // Safety top-up
-  while (trees.length < TREE_COUNT) spawnTree(null, false);
 
   // Painter's order: far first
   trees.sort((a, b) => b.z - a.z);
