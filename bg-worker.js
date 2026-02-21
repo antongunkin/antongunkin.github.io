@@ -122,6 +122,10 @@ function buildForest() {
 
   for (const cx of cols) {
     for (let row = 0; row < rowsPerCol; row++) {
+      /* PRNG call order MUST match original: x, z, trunkW, hue, lit */
+      const treeX = cx + randS(-X_JITTER, X_JITTER);
+      const treeZ = (row + 1) * Z_SPACING + randS(0, Z_SPACING * 0.3);
+      const trunkW = randS(0.55, 1.1);
       const hue = randS(174, 216);
       const lit = randS(0.55, 1.0);
 
@@ -144,9 +148,9 @@ function buildForest() {
       ];
 
       trees.push({
-        x: cx + randS(-X_JITTER, X_JITTER),
-        z: (row + 1) * Z_SPACING + randS(0, Z_SPACING * 0.3),
-        trunkW: randS(0.55, 1.1),
+        x: treeX,
+        z: treeZ,
+        trunkW,
         hue,
         lit,
         fade: 1,
@@ -205,6 +209,10 @@ function handleResize(w, h, deviceDpr) {
   dpr = w <= 768 ? 1 : Math.min(deviceDpr, 1.5);
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
+  if (!IS_WORKER && canvas.style) {
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   cam.fov = Math.max(W, H) * 1.55;
@@ -235,20 +243,22 @@ function drawTree(t) {
   const sideKeep = easeInOut01(clamp01(absDx * INV_CENTER_FADE));
 
   const alpha = t.fade * (nearAlpha + (1 - nearAlpha) * sideKeep) * farAlpha;
-  if (alpha <= 0.005) return;
+  if (alpha <= 0.002) return;
 
   /* Projection */
   const scale = cam.fov / rz;
   const screenX = W * 0.5 + dx * scale;
   const baseW = t.trunkW * scale;
 
-  /* Off-screen cull */
-  if (screenX + baseW < 0 || screenX - baseW > W) return;
-
   const vScale = cam.fov / VP_DIVISOR;
   const vx = W * 0.5 + dx * vScale;
   const raw = baseW * 0.022;
   const topW = raw < 0.6 ? 0.6 : raw;
+
+  /* Off-screen cull — check full trapezoid (top vx AND bottom screenX) */
+  const minX = vx - topW < screenX - baseW ? vx - topW : screenX - baseW;
+  const maxX = vx + topW > screenX + baseW ? vx + topW : screenX + baseW;
+  if (maxX < 0 || minX > W) return;
 
   /* ── Solid body ── */
   const dIdx = (depth * (DEPTH_QUANT - 1) + 0.5) | 0;
@@ -262,18 +272,16 @@ function drawTree(t) {
   ctx.closePath();
   ctx.fill();
 
-  /* ── Gradient glow (skip for barely-visible trees) ── */
-  if (alpha > 0.04) {
-    ctx.globalAlpha = t.lit * alpha;
-    ctx.fillStyle = t.gradCache;
-    ctx.beginPath();
-    ctx.moveTo(vx - topW, topY);
-    ctx.lineTo(vx + topW, topY);
-    ctx.lineTo(screenX + baseW, bottomY);
-    ctx.lineTo(screenX - baseW, bottomY);
-    ctx.closePath();
-    ctx.fill();
-  }
+  /* ── Gradient glow ── */
+  ctx.globalAlpha = t.lit * alpha;
+  ctx.fillStyle = t.gradCache;
+  ctx.beginPath();
+  ctx.moveTo(vx - topW, topY);
+  ctx.lineTo(vx + topW, topY);
+  ctx.lineTo(screenX + baseW, bottomY);
+  ctx.lineTo(screenX - baseW, bottomY);
+  ctx.closePath();
+  ctx.fill();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
