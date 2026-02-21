@@ -25,7 +25,7 @@ const SNAKE_STEP_MS = 3200;
 
 const VIEW_ANGLE_MIN_DEG = 85;
 const VIEW_ANGLE_MAX_DEG = 115;
-const VIEW_SWEEP_MS = 20000; // 85->115 in 10s, then back in 10s
+const VIEW_SWEEP_MS = 20000; // 85->115 in 20s, then back in 20s
 
 let yawCos = 1;
 let yawSin = 0;
@@ -217,7 +217,7 @@ function drawTree(tree) {
 
 // ─── update ───────────────────────────────────────────────────────────────────
 function update(dt, t) {
-  // Angle ping-pong: 65° -> 130° (10s) -> 65° (10s), repeat forever
+  // Angle ping-pong: 85° -> 115° (20s) -> 85° (20s), repeat forever
   const p = (t % (VIEW_SWEEP_MS * 2)) / VIEW_SWEEP_MS; // [0..2)
   const u = p <= 1 ? p : 2 - p; // [0..1..0]
   const viewAngleDeg =
