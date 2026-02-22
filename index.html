@@ -8,6 +8,9 @@
 </head>
 
 <body>
+  <aside>
+    <canvas width="1024" height="512"></canvas>
+  </aside>
   <main>
     <picture></picture>
     <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
@@ -17,16 +20,13 @@
       <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
     </label>
   </main>
-  <aside>
-    <canvas width="1024" height="512"></canvas>
-  </aside>
   <footer></footer>
 
   <script src="bg.js"></script>
   <script>
     const COPY = {
       title: "Hi there 👋",
-      description: "This is a demo of a canvas-based background with smooth theme transitions. Click the button below to say hi!",
+      description: "I’m Anton. I’m a Senior Frontend Engineer in New York building React/Next.js products with a focus on design systems, performance (Core Web Vitals), accessibility, and reliable delivery. I enjoy turning messy problems into clean component architecture, fast pages, and tooling that helps teams ship confidently.",
       links: [
         { name: "LinkedIn", url: "https://www.linkedin.com/in/gunkin" },
         { name: "Resume", url: "https://github.com/antongunkin/resume" },
@@ -65,6 +65,7 @@
 
           setTimeout(function () {
             html.classList.add("activated");
+            window.scroll({ top: 0, behavior: "smooth" });
           }, 0);
         }
       }

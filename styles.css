@@ -1,7 +1,7 @@
 :root {
   --text-color: #000;
   --base-color: #fff;
-  --link-color: #007aff;
+  --link-color: #107fff;
 
   /* Sky gradient */
   --sky-1: #b8f2a8;
@@ -98,6 +98,7 @@ html.theme-light {
 }
 
 body {
+  position: relative;
   line-height: 1.44444;
 }
 
@@ -105,6 +106,7 @@ html,
 body {
   padding: 0;
   margin: 0;
+  min-height: 100vh;
 }
 
 picture {
@@ -126,7 +128,7 @@ picture::after {
   display: block;
   width: 100%;
   height: 100%;
-  background-image: url("portrait_bg_softgray_semialpha_sharper_edges.avif");
+  background-image: url("me.avif");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -159,7 +161,7 @@ html.theme-light picture::after {
 }
 
 main {
-  padding: 30px;
+  padding: 30px 30px 104px;
   opacity: 0;
   visibility: hidden;
   transition:
@@ -180,7 +182,7 @@ h1 {
 }
 
 p {
-  max-width: 500px;
+  max-width: 708px;
   margin: 0 0 20px;
 }
 
@@ -335,7 +337,7 @@ canvas {
 }
 
 .btn {
-  position: absolute;
+  position: fixed;
   bottom: 30px;
   left: 50%;
   width: 120px;
@@ -400,6 +402,10 @@ canvas {
   width: 2px;
   height: 12px;
   margin: -6px 0 0;
+}
+
+.activated .btn {
+  position: absolute;
 }
 
 .activated .btn::before,
