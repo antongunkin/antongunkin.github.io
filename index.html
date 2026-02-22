@@ -8,10 +8,8 @@
 </head>
 
 <body>
-  <header>
-    <picture></picture>
-  </header>
   <main>
+    <picture></picture>
     <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
       <input type="checkbox" id="theme-switch" disabled>
       <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
@@ -26,6 +24,15 @@
 
   <script src="bg.js"></script>
   <script>
+    const COPY = {
+      title: "Hi there 👋",
+      description: "This is a demo of a canvas-based background with smooth theme transitions. Click the button below to say hi!",
+      links: [
+        { name: "LinkedIn", url: "https://www.linkedin.com/in/gunkin" },
+        { name: "Resume", url: "https://github.com/antongunkin/resume" },
+      ],
+    };
+
     /**
      * Theme detection & toggle.
      * Runs after bg.js so the MutationObserver is already watching <html>.
@@ -40,6 +47,9 @@
       var main = document.querySelector("main");
       var footer = document.querySelector("footer");
       var btn = document.createElement("button");
+      var title = document.createElement("h1");
+      var desc = document.createElement("p");
+      var links = document.createElement("div");
 
       function activate() {
         if (!activated) {
@@ -79,6 +89,18 @@
           btn.classList.add("btn");
           btn.addEventListener("click", activate);
           footer.appendChild(btn);
+          title.textContent = COPY.title;
+          desc.textContent = COPY.description;
+          main.appendChild(title);
+          main.appendChild(desc);
+          COPY.links.forEach(function (link) {
+            var a = document.createElement("a");
+            a.textContent = link.name;
+            a.href = link.url;
+            a.target = "_blank";
+            links.appendChild(a);
+          });
+          main.appendChild(links);
 
           setTimeout(function () {
             html.classList.add("loaded");

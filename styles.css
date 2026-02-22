@@ -1,7 +1,7 @@
 :root {
   --text-color: #000;
   --base-color: #fff;
-  --link-color: #1e90ff;
+  --link-color: #007aff;
 
   /* Sky gradient */
   --sky-1: #b8f2a8;
@@ -106,39 +106,12 @@ body {
   margin: 0;
 }
 
-header {
-  position: absolute;
-  top: 30px;
-  left: 30px;
-  font-size: 30px;
-  font-weight: bold;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    opacity 0.3s linear,
-    visibility 0.3s linear;
-}
-
-.activated header {
-  opacity: 1;
-  visibility: visible;
-}
-
-@media (min-width: 768px) {
-  header {
-    font-size: 40px;
-  }
-}
-
-header::after {
-  content: "Hi there 👋";
-}
-
 picture {
   position: relative;
   display: block;
   width: 150px;
   height: 150px;
+  margin: 0 0 20px;
   background-color: rgba(255, 255, 255, 0.22);
   transition: background-color 1s linear;
 }
@@ -185,11 +158,67 @@ html.theme-light picture::after {
 }
 
 main {
+  padding: 30px;
   opacity: 0;
   visibility: hidden;
   transition:
     opacity 0.3s,
     visibility 0.3s;
+}
+
+h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: bold;
+}
+
+@media (min-width: 768px) {
+  h1 {
+    font-size: 40px;
+  }
+}
+
+p {
+  max-width: 400px;
+  margin: 0 0 20px;
+}
+
+a {
+  position: relative;
+  display: inline-block;
+  margin: 0 20px;
+  line-height: 0em;
+  padding-bottom: 0.5em;
+  color: currentColor;
+  text-decoration: none;
+  background-color: var(--link-color);
+  font-weight: bold;
+}
+
+a::before,
+a::after {
+  display: block;
+  position: absolute;
+  bottom: -0.5em;
+  padding-top: 1em;
+  padding-bottom: 1em;
+}
+
+a::before {
+  content: "[";
+  left: -20px;
+  right: 0;
+}
+
+a::after {
+  content: "]";
+  left: 100%;
+  width: 20px;
+  text-align: right;
+}
+
+a + a {
+  margin-left: 40px;
 }
 
 .activated main {
@@ -318,15 +347,18 @@ canvas {
   background-color: hsl(from var(--base-color) h s l / 0.18);
   opacity: 0;
   visibility: hidden;
+  filter: blur(10px);
   transition:
-    opacity 0.3s 1s linear,
-    visibility 0.3s 1s linear,
-    background-color 0.3s;
+    filter 1s 1s linear,
+    opacity 1s 1s linear,
+    visibility 1s 1s linear,
+    background-color 1s linear;
 }
 
 .loaded .btn {
   opacity: 1;
   visibility: visible;
+  filter: blur(0);
 }
 
 .btn::before {
