@@ -310,8 +310,7 @@ canvas {
   transition: background 0.3s;
 }
 
-.theme-toggle__track::after {
-  content: "☀";
+.theme-toggle__btn {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -322,14 +321,32 @@ canvas {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
   transition: transform 0.3s;
   text-align: center;
-  line-height: 18px;
+  overflow: hidden;
+}
+
+.theme-toggle__btn::before {
+  position: absolute;
+  content: "☀";
+  top: 50%;
+  left: 50%;
+  width: 1em;
+  height: 1em;
+  line-height: 1em;
+  text-align: center;
+  margin: -0.5em 0 0 -0.5em;
+}
+
+@supports (-webkit-text-size-adjust: none) and (font: -apple-system-body) {
+  .theme-toggle__btn::before {
+    margin: -0.3em 0 0 -0.5em;
+  }
 }
 
 .theme-toggle input:checked ~ .theme-toggle__track {
   background: rgba(0, 0, 0, 0.18);
 }
 
-.theme-toggle input:checked ~ .theme-toggle__track::after {
+.theme-toggle input:checked ~ .theme-toggle__track .theme-toggle__btn {
   transform: translateX(18px);
 }
 
