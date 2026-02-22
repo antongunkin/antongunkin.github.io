@@ -86,7 +86,7 @@ const DEFAULT_THEME = {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  Theme state                                                               */
 /* ═══════════════════════════════════════════════════════════════════════════ */
-const THEME_DURATION = 5000;
+const THEME_DURATION = 1000;
 let themeFrom = null;
 let themeTo = null;
 let cur = null; // current (possibly interpolated) theme snapshot

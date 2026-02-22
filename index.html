@@ -8,8 +8,11 @@
 </head>
 
 <body>
-  <header></header>
+  <aside>
+    <canvas width="1024" height="512"></canvas>
+  </aside>
   <main>
+    <picture></picture>
     <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
       <input type="checkbox" id="theme-switch" disabled>
       <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
@@ -17,68 +20,8 @@
       <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
     </label>
   </main>
-  <aside>
-    <canvas width="1024" height="512"></canvas>
-  </aside>
-
-  <script src="bg.js"></script>
-  <script>
-    /**
-     * Theme detection & toggle.
-     * Runs after bg.js so the MutationObserver is already watching <html>.
-     * Changing the class triggers a smooth 5-second colour transition in the
-     * canvas renderer.
-     */
-    (function () {
-      var userIsActive = false;
-      var toggle = document.getElementById("theme-switch");
-      var html = document.documentElement;
-      var main = document.querySelector("main");
-
-      function applyTheme(dark) {
-        html.classList.remove("theme-dark", "theme-light");
-        html.classList.add(dark ? "theme-dark" : "theme-light");
-      }
-
-      function activateUser() {
-        if (!userIsActive) {
-          userIsActive = true;
-          var btn = document.createElement("button");
-          btn.textContent = "View resume";
-          btn.classList.add("btn");
-          main.appendChild(btn);
-          toggle.checked = mq.matches;
-          toggle.disabled = false;
-          applyTheme(mq.matches);
-
-          setTimeout(function () {
-            html.classList.add("loaded");
-          }, 400);
-        }
-      }
-
-      /* OS preference */
-      var mq = window.matchMedia("(prefers-color-scheme: dark)");
-
-      /* Manual toggle */
-      toggle.addEventListener("change", function () {
-        applyTheme(toggle.checked);
-      });
-
-      /* React to OS preference changes in real time */
-      mq.addEventListener("change", function (e) {
-        toggle.checked = e.matches;
-        applyTheme(e.matches);
-      });
-
-      /* User activity */
-      document.addEventListener('mousemove', activateUser);
-      document.addEventListener('mousedown', activateUser);
-      document.addEventListener('keydown', activateUser);
-      document.addEventListener('scroll', activateUser);
-      document.addEventListener('touchstart', activateUser);
-    })();
-  </script>
+  <footer></footer>
+  <script src="main.js"></script>
 </body>
 
 </html>
