@@ -14,7 +14,7 @@
     <span class="theme-toggle__track"></span>
     <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
   </label>
-
+  <header></header>
   <main>
     Hello World!
   </main>
@@ -31,6 +31,7 @@
      * canvas renderer.
      */
     (function () {
+      var userIsActive = false;
       var toggle = document.getElementById("theme-switch");
       var html = document.documentElement;
 
@@ -39,16 +40,21 @@
         html.classList.add(dark ? "theme-dark" : "theme-light");
       }
 
+      function activateUser() {
+        if (!userIsActive) {
+          userIsActive = true;
+          html.classList.add("user-active");
+
+          setTimeout(function () {
+            toggle.checked = mq.matches;
+            toggle.disabled = false;
+            applyTheme(mq.matches);
+          }, 400);
+        }
+      }
+
       /* OS preference */
       var mq = window.matchMedia("(prefers-color-scheme: dark)");
-
-      /* Small delay so the user briefly sees the default palette,
-         then the canvas animates into the detected theme. */
-      setTimeout(function () {
-        toggle.checked = mq.matches;
-        toggle.disabled = false;
-        applyTheme(mq.matches);
-      }, 400);
 
       /* Manual toggle */
       toggle.addEventListener("change", function () {
@@ -60,6 +66,13 @@
         toggle.checked = e.matches;
         applyTheme(e.matches);
       });
+
+      /* User activity */
+      document.addEventListener('mousemove', activateUser);
+      document.addEventListener('mousedown', activateUser);
+      document.addEventListener('keydown', activateUser);
+      document.addEventListener('scroll', activateUser);
+      document.addEventListener('touchstart', activateUser);
     })();
   </script>
 </body>
