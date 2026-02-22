@@ -31,6 +31,8 @@
         { name: "LinkedIn", url: "https://www.linkedin.com/in/gunkin" },
         { name: "Resume", url: "https://github.com/antongunkin/resume" },
       ],
+      btnOpen: "Say 👋",
+      btnClose: "Close",
     };
 
     /**
@@ -59,11 +61,11 @@
           applyTheme(mq.matches);
           btn.removeEventListener('click', activate);
           btn.addEventListener("click", deactivate);
-          btn.textContent = "Close";
+          btn.textContent = COPY.btnClose;
 
           setTimeout(function () {
             html.classList.add("activated");
-          }, 400);
+          }, 0);
         }
       }
 
@@ -73,7 +75,7 @@
           html.classList.remove("theme-dark", "theme-light", "activated");
           btn.removeEventListener("click", deactivate);
           btn.addEventListener("click", activate);
-          btn.textContent = "Say hi!";
+          btn.textContent = COPY.btnOpen;
         }
       }
 
@@ -85,7 +87,7 @@
       function load() {
         if (!loaded) {
           loaded = true;
-          btn.textContent = "Say hi!";
+          btn.textContent = COPY.btnOpen;
           btn.classList.add("btn");
           btn.addEventListener("click", activate);
           footer.appendChild(btn);
