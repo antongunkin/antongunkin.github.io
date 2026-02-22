@@ -8,15 +8,14 @@
 </head>
 
 <body>
-  <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
-    <input type="checkbox" id="theme-switch" disabled>
-    <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
-    <span class="theme-toggle__track"></span>
-    <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
-  </label>
   <header></header>
   <main>
-    Hello World!
+    <label class="theme-toggle" for="theme-switch" aria-label="Toggle dark / light mode">
+      <input type="checkbox" id="theme-switch" disabled>
+      <span class="theme-toggle__icon theme-toggle__icon--sun">☀</span>
+      <span class="theme-toggle__track"></span>
+      <span class="theme-toggle__icon theme-toggle__icon--moon">☽</span>
+    </label>
   </main>
   <aside>
     <canvas width="1024" height="512"></canvas>
@@ -34,6 +33,7 @@
       var userIsActive = false;
       var toggle = document.getElementById("theme-switch");
       var html = document.documentElement;
+      var main = document.querySelector("main");
 
       function applyTheme(dark) {
         html.classList.remove("theme-dark", "theme-light");
@@ -43,12 +43,16 @@
       function activateUser() {
         if (!userIsActive) {
           userIsActive = true;
-          html.classList.add("user-active");
+          var btn = document.createElement("button");
+          btn.textContent = "View resume";
+          btn.classList.add("btn");
+          main.appendChild(btn);
+          toggle.checked = mq.matches;
+          toggle.disabled = false;
+          applyTheme(mq.matches);
 
           setTimeout(function () {
-            toggle.checked = mq.matches;
-            toggle.disabled = false;
-            applyTheme(mq.matches);
+            html.classList.add("loaded");
           }, 400);
         }
       }
