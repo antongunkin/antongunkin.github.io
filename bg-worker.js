@@ -79,6 +79,8 @@ const DEFAULT_THEME = {
   treeHueMin: 174,
   treeHueMax: 216,
   treeSat: 58,
+  treeLightMin: 36,
+  treeLightMax: 52,
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -173,6 +175,8 @@ function cloneTheme(t) {
     treeHueMin: t.treeHueMin,
     treeHueMax: t.treeHueMax,
     treeSat: t.treeSat,
+    treeLightMin: t.treeLightMin,
+    treeLightMax: t.treeLightMax,
   };
 }
 
@@ -200,6 +204,8 @@ function lerpTheme(a, b, t) {
     treeHueMin: a.treeHueMin + (b.treeHueMin - a.treeHueMin) * t,
     treeHueMax: a.treeHueMax + (b.treeHueMax - a.treeHueMax) * t,
     treeSat: a.treeSat + (b.treeSat - a.treeSat) * t,
+    treeLightMin: a.treeLightMin + (b.treeLightMin - a.treeLightMin) * t,
+    treeLightMax: a.treeLightMax + (b.treeLightMax - a.treeLightMax) * t,
   };
 }
 
@@ -236,9 +242,11 @@ function rebuildTreeColors() {
     var t = trees[i];
     var hue = cur.treeHueMin + t.hueRng * (cur.treeHueMax - cur.treeHueMin);
     var sat = cur.treeSat;
+    var lMin = cur.treeLightMin;
+    var lMax = cur.treeLightMax;
 
     for (var d = 0; d < DEPTH_QUANT; d++) {
-      var l = 36 + (d / (DEPTH_QUANT - 1)) * 16;
+      var l = lMin + (d / (DEPTH_QUANT - 1)) * (lMax - lMin);
       t.solidColors[d] =
         "hsl(" +
         hue.toFixed(1) +
@@ -249,10 +257,18 @@ function rebuildTreeColors() {
         "%)";
     }
 
-    t.gradStops[0] = "hsla(" + (hue - 14).toFixed(1) + ",92%,90%,0.75)";
-    t.gradStops[1] = "hsla(" + (hue - 7).toFixed(1) + ",84%,72%,0.42)";
-    t.gradStops[2] = "hsla(" + hue.toFixed(1) + ",72%,54%,0.13)";
-    t.gradStops[3] = "hsla(" + (hue + 10).toFixed(1) + ",66%,30%,0)";
+    var g0 = Math.min(90, lMax + 28);
+    var g1 = Math.min(72, lMax + 16);
+    var g2 = Math.min(54, lMax + 6);
+    var g3 = Math.max(8, lMin - 4);
+    t.gradStops[0] =
+      "hsla(" + (hue - 14).toFixed(1) + ",86%," + g0.toFixed(1) + "%,0.62)";
+    t.gradStops[1] =
+      "hsla(" + (hue - 7).toFixed(1) + ",76%," + g1.toFixed(1) + "%,0.35)";
+    t.gradStops[2] =
+      "hsla(" + hue.toFixed(1) + ",66%," + g2.toFixed(1) + "%,0.11)";
+    t.gradStops[3] =
+      "hsla(" + (hue + 10).toFixed(1) + ",56%," + g3.toFixed(1) + "%,0)";
   }
 }
 
@@ -281,11 +297,13 @@ function buildForest() {
       const lit = randS(0.55, 1.0);
 
       const sat = cur.treeSat;
+      const lMin = cur.treeLightMin;
+      const lMax = cur.treeLightMax;
 
       /* Pre-bake quantised solid-body colour strings. */
       const solidColors = new Array(DEPTH_QUANT);
       for (let d = 0; d < DEPTH_QUANT; d++) {
-        const l = 36 + (d / (DEPTH_QUANT - 1)) * 16;
+        const l = lMin + (d / (DEPTH_QUANT - 1)) * (lMax - lMin);
         solidColors[d] =
           "hsl(" +
           hue.toFixed(1) +
@@ -297,11 +315,15 @@ function buildForest() {
       }
 
       /* Pre-bake gradient colour-stop strings. */
+      const g0 = Math.min(90, lMax + 28);
+      const g1 = Math.min(72, lMax + 16);
+      const g2 = Math.min(54, lMax + 6);
+      const g3 = Math.max(8, lMin - 4);
       const gradStops = [
-        "hsla(" + (hue - 14).toFixed(1) + ",92%,90%,0.75)",
-        "hsla(" + (hue - 7).toFixed(1) + ",84%,72%,0.42)",
-        "hsla(" + hue.toFixed(1) + ",72%,54%,0.13)",
-        "hsla(" + (hue + 10).toFixed(1) + ",66%,30%,0)",
+        "hsla(" + (hue - 14).toFixed(1) + ",86%," + g0.toFixed(1) + "%,0.62)",
+        "hsla(" + (hue - 7).toFixed(1) + ",76%," + g1.toFixed(1) + "%,0.35)",
+        "hsla(" + hue.toFixed(1) + ",66%," + g2.toFixed(1) + "%,0.11)",
+        "hsla(" + (hue + 10).toFixed(1) + ",56%," + g3.toFixed(1) + "%,0)",
       ];
 
       trees.push({

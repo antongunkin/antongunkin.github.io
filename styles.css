@@ -23,31 +23,35 @@
   --tree-hue-min: 174;
   --tree-hue-max: 216;
   --tree-sat: 58;
+  --tree-light-min: 36;
+  --tree-light-max: 52;
 }
 
 /* ── Dark theme (30 % darker + white text) ───────────────────────── */
 html.theme-dark {
   --text-color: #fff;
 
-  --sky-1: #81a976;
-  --sky-2: #50a081;
-  --sky-3: #278197;
-  --sky-4: #183c89;
-  --sky-5: #152470;
-  --sky-6: #0b083e;
+  --sky-1: #6f7478;
+  --sky-2: #dde8f1;
+  --sky-3: #cad8e6;
+  --sky-4: #b4c4d6;
+  --sky-5: #9badc2;
+  --sky-6: #8398af;
 
-  --fog-1: #4693a5;
-  --fog-2: #275f9a;
-  --fog-3: #275b97;
-  --fog-4: #142e77;
-  --fog-1-a: 0.12;
-  --fog-2-a: 0.24;
-  --fog-3-a: 0.24;
-  --fog-4-a: 0.12;
+  --fog-1: #f4f8fb;
+  --fog-2: #dce6ee;
+  --fog-3: #c7d4df;
+  --fog-4: #9fb2c3;
+  --fog-1-a: 0.06;
+  --fog-2-a: 0.1;
+  --fog-3-a: 0.1;
+  --fog-4-a: 0.08;
 
-  --tree-hue-min: 174;
-  --tree-hue-max: 216;
-  --tree-sat: 45;
+  --tree-hue-min: 206;
+  --tree-hue-max: 226;
+  --tree-sat: 22;
+  --tree-light-min: 10;
+  --tree-light-max: 26;
 }
 
 /* ── Light theme (bright, misty forest) ──────────────────────────── */
@@ -73,6 +77,8 @@ html.theme-light {
   --tree-hue-min: 110;
   --tree-hue-max: 150;
   --tree-sat: 30;
+  --tree-light-min: 38;
+  --tree-light-max: 56;
 }
 
 html {

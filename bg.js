@@ -44,6 +44,8 @@
       treeHueMin: parseFloat(v("--tree-hue-min")),
       treeHueMax: parseFloat(v("--tree-hue-max")),
       treeSat: parseFloat(v("--tree-sat")),
+      treeLightMin: parseFloat(v("--tree-light-min")),
+      treeLightMax: parseFloat(v("--tree-light-max")),
     };
   }
 
