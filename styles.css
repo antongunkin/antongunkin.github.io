@@ -133,8 +133,11 @@ picture::after {
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
-  opacity: 0;
-  transition: opacity 1s linear;
+  opacity: 0.99999;
+  visibility: hidden;
+  transition:
+    opacity 10000s linear,
+    visibility 0s;
 }
 
 picture::before {
@@ -150,14 +153,28 @@ html.theme-dark picture {
 }
 
 html.theme-dark picture::before {
+  visibility: visible;
   opacity: 1;
+}
+
+html.theme-dark picture::after {
+  transition:
+    opacity 0s linear,
+    visibility 0s;
 }
 
 html.theme-light picture {
   background-color: hsl(151deg 29% 53% / 70%);
 }
 
+html.theme-light picture::before {
+  transition:
+    opacity 0s linear,
+    visibility 0s;
+}
+
 html.theme-light picture::after {
+  visibility: visible;
   opacity: 1;
 }
 
