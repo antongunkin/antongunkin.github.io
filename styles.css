@@ -31,17 +31,17 @@
 html.theme-dark {
   --text-color: #fff;
 
-  --sky-1: #6f7478;
-  --sky-2: #dde8f1;
-  --sky-3: #cad8e6;
-  --sky-4: #b4c4d6;
-  --sky-5: #9badc2;
-  --sky-6: #8398af;
+  --sky-1: #1585a1;
+  --sky-2: #126393;
+  --sky-3: #171d4d;
+  --sky-4: #121d49;
+  --sky-5: #0d1e43;
+  --sky-6: #141645;
 
-  --fog-1: #f4f8fb;
-  --fog-2: #dce6ee;
-  --fog-3: #c7d4df;
-  --fog-4: #9fb2c3;
+  --fog-1: #2a093b;
+  --fog-2: #1c2c59;
+  --fog-3: #10807d;
+  --fog-4: #4c1a52;
   --fog-1-a: 0.06;
   --fog-2-a: 0.1;
   --fog-3-a: 0.1;
@@ -49,7 +49,7 @@ html.theme-dark {
 
   --tree-hue-min: 206;
   --tree-hue-max: 226;
-  --tree-sat: 22;
+  --tree-sat: 32;
   --tree-light-min: 10;
   --tree-light-max: 26;
 }
