@@ -22,6 +22,7 @@
   <aside>
     <canvas width="1024" height="512"></canvas>
   </aside>
+  <footer></footer>
 
   <script src="bg.js"></script>
   <script>
@@ -32,26 +33,52 @@
      * canvas renderer.
      */
     (function () {
-      var userIsActive = false;
+      var loaded = false;
+      let activated = false;
       var toggle = document.getElementById("theme-switch");
       var html = document.documentElement;
       var main = document.querySelector("main");
+      var footer = document.querySelector("footer");
+      var btn = document.createElement("button");
+
+      function activate() {
+        if (!activated) {
+          activated = true;
+          toggle.checked = mq.matches;
+          toggle.disabled = false;
+          applyTheme(mq.matches);
+          btn.removeEventListener('click', activate);
+          btn.addEventListener("click", deactivate);
+          btn.textContent = "Close";
+
+          setTimeout(function () {
+            html.classList.add("activated");
+          }, 400);
+        }
+      }
+
+      function deactivate() {
+        if (activated) {
+          activated = false;
+          html.classList.remove("theme-dark", "theme-light", "activated");
+          btn.removeEventListener("click", deactivate);
+          btn.addEventListener("click", activate);
+          btn.textContent = "Say hi!";
+        }
+      }
 
       function applyTheme(dark) {
         html.classList.remove("theme-dark", "theme-light");
         html.classList.add(dark ? "theme-dark" : "theme-light");
       }
 
-      function activateUser() {
-        if (!userIsActive) {
-          userIsActive = true;
-          var btn = document.createElement("button");
-          btn.textContent = "View resume";
+      function load() {
+        if (!loaded) {
+          loaded = true;
+          btn.textContent = "Say hi!";
           btn.classList.add("btn");
-          main.appendChild(btn);
-          toggle.checked = mq.matches;
-          toggle.disabled = false;
-          applyTheme(mq.matches);
+          btn.addEventListener("click", activate);
+          footer.appendChild(btn);
 
           setTimeout(function () {
             html.classList.add("loaded");
@@ -73,12 +100,7 @@
         applyTheme(e.matches);
       });
 
-      /* User activity */
-      document.addEventListener('mousemove', activateUser);
-      document.addEventListener('mousedown', activateUser);
-      document.addEventListener('keydown', activateUser);
-      document.addEventListener('scroll', activateUser);
-      document.addEventListener('touchstart', activateUser);
+      load();
     })();
   </script>
 </body>
