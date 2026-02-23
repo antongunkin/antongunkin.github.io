@@ -385,7 +385,7 @@ function handleResize(w, h, deviceDpr) {
   W = w;
   H = h;
   // Mobile (≤ 768 CSS-px wide): always 1×. Desktop: cap at 1.5×.
-  dpr = w <= 768 ? 1 : Math.min(deviceDpr, 1.5);
+  dpr = 1; // 1 for all devices to save GPU / battery — no visible quality difference
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
   if (!IS_WORKER && canvas.style) {
@@ -583,7 +583,7 @@ if (IS_WORKER) {
   buildForest();
 
   var resizeMain = function () {
-    handleResize(innerWidth, innerHeight, devicePixelRatio || 1);
+    handleResize(innerWidth, innerHeight, 1);
   };
   resizeMain();
 

@@ -78,7 +78,7 @@ function bg() {
         canvas: oc,
         w: innerWidth,
         h: innerHeight,
-        dpr: devicePixelRatio || 1,
+        dpr: 0.5,
         theme: readTheme(),
       },
       [oc],
