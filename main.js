@@ -78,7 +78,7 @@ function bg() {
         canvas: oc,
         w: innerWidth,
         h: innerHeight,
-        dpr: 0.5,
+        dpr: 1,
         theme: readTheme(),
       },
       [oc],
@@ -96,7 +96,7 @@ function bg() {
           type: "resize",
           w: innerWidth,
           h: innerHeight,
-          dpr: devicePixelRatio || 1,
+          dpr: 1,
         });
       }, 120);
     });
